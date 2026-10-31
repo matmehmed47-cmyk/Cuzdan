@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-26';
+const SURUM = 'cuzdan-27';
 const BILDIRIM = 'cuzdan-bildirim';
 const EN_ESKI = 2 * 24 * 60 * 60 * 1000;
 const DOSYALAR = [
@@ -62,7 +62,7 @@ self.addEventListener('fetch', (olay) => {
         }
         return cevap;
       })
-      .catch(() => caches.match(olay.request)),
+      .catch(() => caches.match(olay.request, { ignoreSearch: true })),
   );
 });
 
