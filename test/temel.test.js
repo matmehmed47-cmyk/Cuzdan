@@ -552,3 +552,100 @@ test('hesap makinesi: 1000 rastgele işlem kesin sonuçla aynı', async () => {
     assert.match(sonucYaz(sonuc), /^-?[\d.]+(,\d+)?$/);
   }
 });
+
+const ornekVeri = (ek = {}) => ({
+  surum: 1,
+  ad: 'Ev',
+  ayar: ilkAyar(15),
+  faturalar: [{ id: 'f1', ad: 'Elektrik', tur: 'sabit', gun: 20, ilkAy: '2026-11', kurus: 85000 }],
+  donemler: { '2026-11-15': { para: 500000 } },
+  ...ek,
+});
+const ornekDonem = { baslangic: '2026-11-15', bitis: '2026-12-14', sonraki: '2026-12-15' };
+
+test('hatırlatma: tek ve net metin, önceden ve son gün', async () => {
+  const { bildirimPlani, gelenler } = await import('../bildirim.js');
+  const veri = ornekVeri();
+  const plan = bildirimPlani(veri, ornekDonem, veri.donemler['2026-11-15'], '2026-11-16', { gunOnce: 1, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' });
+  assert.deepEqual(plan.map((k) => k.anahtar), ['f:f1:2026-11:once', 'f:f1:2026-11:gun']);
+  assert.equal(plan[0].metin, 'Yarın son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
+  assert.equal(plan[1].metin, 'Bugün son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
+  assert.equal(plan[0].zaman, Date.parse('2026-11-19T09:00:00+03:00'));
+  const saatten = Date.parse('2026-11-19T08:59:00+03:00');
+  assert.equal(gelenler(plan, saatten, []).length, 0);
+  assert.equal(gelenler(plan, saatten + 60000, []).length, 1);
+  assert.equal(gelenler(plan, saatten + 60000, ['f:f1:2026-11:once']).length, 0);
+});
+
+test('hatırlatma: ödenince durur, günü kaçırılırsa açılışta söyler, gecikti bir kez', async () => {
+  const { bildirimPlani } = await import('../bildirim.js');
+  const ayar = { gunOnce: 3, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' };
+  const veri = ornekVeri();
+  const kayit = veri.donemler['2026-11-15'];
+  const gecikmis = bildirimPlani(veri, ornekDonem, kayit, '2026-11-19', ayar);
+  assert.equal(gecikmis[0].metin, 'Yarın son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
+  const geciken = bildirimPlani(veri, ornekDonem, kayit, '2026-11-25', ayar);
+  assert.deepEqual(geciken.map((k) => k.anahtar), ['f:f1:2026-11:gun']);
+  assert.match(geciken[0].metin, /^Gecikti/);
+
+  const odenmis = ornekVeri();
+  odenmis.donemler['2026-11-15'].hareketler = [{ tur: 'fatura', faturaId: 'f1', ay: '2026-11', ad: 'Elektrik', kurus: 85000, tarih: '2026-11-18' }];
+  assert.deepEqual(bildirimPlani(odenmis, ornekDonem, odenmis.donemler['2026-11-15'], '2026-11-19', ayar), []);
+});
+
+test('hatırlatma: tutarı belli olmayan fatura, maaş, gün sonu, para sınırı', async () => {
+  const { bildirimPlani } = await import('../bildirim.js');
+  const ayar = { gunOnce: 0, saat: '09:00', maas: true, gunSonu: true, gunSonuSaat: '21:00', altSinir: 1000000 };
+  const veri = ornekVeri({ faturalar: [{ id: 'f1', ad: 'Su', tur: 'degisken', gun: 20, ilkAy: '2026-11' }] });
+  const kayit = veri.donemler['2026-11-15'];
+  const plan = bildirimPlani(veri, ornekDonem, kayit, '2026-11-15', ayar);
+  const bul = (bas) => plan.find((k) => k.anahtar.startsWith(bas));
+  assert.equal(bul('f:f1').metin, 'Bugün son gün. Tutarı henüz belli değil.');
+  assert.ok(bul('maas:2026-11-15'));
+  assert.ok(bul('maas:2026-12-15'));
+  assert.equal(plan.filter((k) => k.anahtar.startsWith('gunsonu')).length, 3);
+  assert.equal(bul('para:').metin, 'Serbest paran 10.000,00 TL altına indi: 5.000,00 TL.');
+  kayit.hareketler = [{ tur: 'harcama', kurus: 100, tarih: '2026-11-15' }];
+  const sonra = bildirimPlani(veri, ornekDonem, kayit, '2026-11-15', ayar);
+  assert.equal(sonra.filter((k) => k.anahtar.startsWith('gunsonu')).length, 2);
+});
+
+test('hatırlatma ayarı yedekte doğrulanır', () => {
+  const temel = { surum: 1, ad: 'Ev', ayar: ilkAyar(15), donemler: {} };
+  const ayar = { gunOnce: 3, saat: '09:00', maas: true, gunSonu: false, gunSonuSaat: '21:00' };
+  assert.equal(veriGecerliMi({ ...temel, bildirim: ayar }), true);
+  assert.equal(veriGecerliMi({ ...temel, bildirim: { ...ayar, saat: '25:00' } }), false);
+  assert.equal(veriGecerliMi({ ...temel, bildirim: { ...ayar, gunOnce: 9 } }), false);
+});
+
+test('uygulama kapalıyken: vakti gelen bir kez gösterilir, eski atlanır', async () => {
+  const { readFileSync } = await import('node:fs');
+  const vm = await import('node:vm');
+  const dolap = new Map();
+  const gosterilen = [];
+  const dinleyiciler = {};
+  const simdi = Date.now();
+  const cache = {
+    match: async (ad) => (dolap.has(ad) ? { json: async () => dolap.get(ad) } : undefined),
+    put: async (ad, cevap) => dolap.set(ad, await cevap.json()),
+  };
+  dolap.set('bildirim-plan', [
+    { anahtar: 'a', zaman: simdi - 1000, baslik: 'Elektrik', metin: 'Yarın' },
+    { anahtar: 'b', zaman: simdi + 100000, baslik: 'Kira', metin: 'Sonra' },
+    { anahtar: 'c', zaman: simdi - 9 * 86400000, baslik: 'Eski', metin: 'Eski' },
+  ]);
+  const self = {
+    addEventListener: (ad, fn) => { dinleyiciler[ad] = fn; },
+    registration: { showNotification: async (baslik) => gosterilen.push(baslik) },
+    location: { origin: 'https://ornek.test' },
+  };
+  vm.runInNewContext(readFileSync(new URL('../sw.js', import.meta.url), 'utf8'), { self, caches: { open: async () => cache }, Response, URL, Date, JSON });
+  const calistir = async () => {
+    let bekle;
+    dinleyiciler.periodicsync({ tag: 'cuzdan-hatirlat', waitUntil: (p) => { bekle = p; } });
+    await bekle;
+  };
+  await calistir();
+  await calistir();
+  assert.deepEqual(gosterilen, ['Elektrik']);
+});

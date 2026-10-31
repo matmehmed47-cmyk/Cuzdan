@@ -75,6 +75,13 @@ import {
   turKayitlari,
   yillar,
 } from './birikim.js';
+import {
+  bildirimAyari,
+  bildirimPlani,
+  gelenler,
+  gosterilenKaydet,
+  gosterilenYukle,
+} from './bildirim.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
 import {
   ALTINLAR,
@@ -184,6 +191,7 @@ function altMenu(aktif) {
 function kaydetVeUyar(yeni) {
   veri = yeni;
   uyari = kaydet(veri) ? '' : 'Kayıt yapılamadı. Telefonda yer dolu olabilir, yedeğini indir.';
+  planYaz();
 }
 
 function hataSatiri() {
@@ -398,6 +406,7 @@ function anaEkran() {
     'ana',
     ustBolum(veri.ad),
     bilgiSatiri(),
+    hatirlatmaKartlari(donem, kayit, bugun),
     el(
       'div',
       { sinif: 'panel' },
@@ -1996,6 +2005,167 @@ function hesapAc(kutu) {
   kok.append(perde);
 }
 
+/* Hatırlatmalar */
+
+function hatirlatmaKartlari(donem, kayit, bugun) {
+  const gelen = gelenler(bildirimPlani(veri, donem, kayit, bugun), Date.now(), gosterilenYukle());
+  return gelen.slice(0, 1).map((k) => el(
+    'section',
+    { sinif: 'hatirlatma', role: 'status' },
+    el(
+      'div',
+      {},
+      el('p', {}, el('strong', {}, k.baslik)),
+      el('p', { sinif: 'ipucu' }, k.metin),
+      gelen.length > 1 ? el('p', { sinif: 'ipucu' }, `${gelen.length - 1} hatırlatma daha var.`) : null,
+    ),
+    el('button', {
+      type: 'button',
+      sinif: 'ikincil kucuk',
+      onclick: () => {
+        gosterilenKaydet([...gosterilenYukle(), k.anahtar]);
+        anaEkran();
+      },
+    }, 'Tamam'),
+  ));
+}
+
+function planYaz() {
+  if (!veri?.bildirim?.telefon || !window.caches) return;
+  const bugun = bugunTR();
+  const donem = donemBul(veri.ayar, bugun);
+  const kayit = veri.donemler[donem.baslangic];
+  if (!kayit) return;
+  const gosterilen = gosterilenYukle();
+  const plan = bildirimPlani(veri, donem, kayit, bugun).filter((k) => !gosterilen.includes(k.anahtar));
+  window.caches.open('cuzdan-bildirim').then((o) => o.put('bildirim-plan', new Response(JSON.stringify(plan)))).catch(() => {});
+}
+
+// Telefonda gösterilen hatırlatma, uygulama açılınca bir daha kart olarak çıkmasın.
+async function gosterilenleriAl() {
+  if (!window.caches) return;
+  try {
+    const cevap = await (await window.caches.open('cuzdan-bildirim')).match('bildirim-gosterilen');
+    if (!cevap) return;
+    gosterilenKaydet([...gosterilenYukle(), ...(await cevap.json())]);
+    canliTazele();
+  } catch {
+    // Okunamazsa kart görünür, zararı yok.
+  }
+}
+
+async function arkaPlanKaydi() {
+  try {
+    const kayit = await navigator.serviceWorker.ready;
+    await kayit.periodicSync?.register('cuzdan-hatirlat', { minInterval: 6 * 60 * 60 * 1000 });
+  } catch {
+    // Telefon izin vermezse hatırlatmalar uygulama açılınca görünür.
+  }
+}
+
+function hatirlatmaEkrani() {
+  const ayar = bildirimAyari(veri);
+  const destek = 'Notification' in window && 'serviceWorker' in navigator;
+  const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent ?? '');
+  const arkaPlan = typeof window.ServiceWorkerRegistration === 'function' && 'periodicSync' in window.ServiceWorkerRegistration.prototype;
+  const hata = hataSatiri();
+  const gunler = [[0, 'Sadece son gün'], [1, '1 gün önce'], [2, '2 gün önce'], [3, '3 gün önce'], [5, '5 gün önce'], [7, '7 gün önce']];
+  const gunOnce = el('select', { id: 'gun-once' }, gunler.map(([g, ad]) => el('option', { value: String(g), selected: g === ayar.gunOnce }, ad)));
+  const saat = el('input', { id: 'saat', type: 'time', value: ayar.saat });
+  const maas = el('input', { id: 'maas', type: 'checkbox', checked: ayar.maas });
+  const gunSonu = el('input', { id: 'gun-sonu', type: 'checkbox', checked: ayar.gunSonu });
+  const gunSonuSaat = el('input', { id: 'gun-sonu-saat', type: 'time', value: ayar.gunSonuSaat });
+  const [sinirEtiketi, sinirKutusu] = tutarAlani('alt-sinir', 'Serbest para şunun altına inince söyle (isteğe bağlı)', ayar.altSinir ? paraYaz(ayar.altSinir) : '');
+  const durum = el('p', { sinif: 'ipucu', role: 'status' }, telefonDurumu());
+
+  function telefonDurumu() {
+    if (!destek) return iphone ? 'iPhone’da önce uygulamayı ana ekrana eklemelisin.' : 'Bu cihaz telefon bildirimini desteklemiyor.';
+    if (window.Notification.permission === 'denied') return 'Bildirim izni kapalı. Telefonun ayarlarından açabilirsin.';
+    if (!ayar.telefon) return 'Telefon bildirimi kapalı.';
+    return arkaPlan
+      ? 'Açık. Uygulama kapalıyken de denenir, saati telefon belirler ve gecikebilir.'
+      : 'Açık. Bu cihaz kapalı uygulamadan bildirim çalıştıramıyor; hatırlatma açınca görünür.';
+  }
+
+  async function telefonuAc() {
+    if ((await window.Notification.requestPermission()) !== 'granted') {
+      durum.textContent = 'İzin verilmedi. Hatırlatmalar uygulamayı açınca görünmeye devam eder.';
+      return;
+    }
+    kaydetVeUyar({ ...veri, bildirim: { ...ayar, telefon: true } });
+    await arkaPlanKaydi();
+    hatirlatmaEkrani();
+  }
+
+  async function denemeGonder() {
+    (await navigator.serviceWorker.ready).showNotification('Cüzdan', { body: 'Deneme bildirimi. Hatırlatmalar böyle görünecek.', icon: 'ikon/ikon-192.png' });
+  }
+
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const yazilan = sinirKutusu.value.trim();
+        const altSinir = yazilan ? paraCoz(yazilan) : undefined;
+        if (altSinir === null || altSinir === 0) return hataGoster(hata, 'Sıfırdan büyük bir tutar yaz. Örnek: 1.000');
+        if (!saat.value || !gunSonuSaat.value) return hataGoster(hata, 'Saati seç.');
+        kaydetVeUyar({
+          ...veri,
+          bildirim: {
+            gunOnce: Number(gunOnce.value),
+            saat: saat.value,
+            maas: maas.checked,
+            gunSonu: gunSonu.checked,
+            gunSonuSaat: gunSonuSaat.value,
+            altSinir,
+            telefon: ayar.telefon,
+          },
+        });
+        ayarlarEkrani();
+      },
+    },
+    ikiAlan([el('label', { htmlFor: 'gun-once' }, 'Ne zaman söylesin?'), gunOnce], [el('label', { htmlFor: 'saat' }, 'Saat'), saat]),
+    el('p', { sinif: 'ipucu' }, 'Her ödeme için bir kez önceden, bir kez son gün söylenir. Ödenince durur.'),
+    el('label', { sinif: 'secim', htmlFor: 'maas' }, maas, el('span', {}, 'Maaş gününde söyle')),
+    el('label', { sinif: 'secim', htmlFor: 'gun-sonu' }, gunSonu, el('span', {}, 'Gün sonunda harcamaları sor')),
+    ikiAlan([el('label', { htmlFor: 'gun-sonu-saat' }, 'Gün sonu saati'), gunSonuSaat]),
+    sinirEtiketi,
+    sinirKutusu,
+    hata,
+    el('button', { type: 'submit' }, 'Kaydet'),
+  );
+  goster(
+    ustBolum('Hatırlatmalar', ayarlarEkrani),
+    bilgiSatiri(),
+    form,
+    el(
+      'section',
+      { sinif: 'kart bosluk' },
+      el('h2', {}, 'Telefon bildirimi'),
+      durum,
+      el('div', { sinif: 'kalem-dugme' },
+        destek && !ayar.telefon && window.Notification.permission !== 'denied'
+          ? el('button', { type: 'button', sinif: 'kucuk', onclick: telefonuAc }, 'Bildirimi aç')
+          : null,
+        destek && ayar.telefon
+          ? el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: denemeGonder }, 'Deneme bildirimi')
+          : null,
+        destek && ayar.telefon
+          ? el('button', {
+              type: 'button',
+              sinif: 'ikincil kucuk',
+              onclick: () => {
+                kaydetVeUyar({ ...veri, bildirim: { ...ayar, telefon: false } });
+                window.caches?.delete('cuzdan-bildirim').catch(() => {});
+                hatirlatmaEkrani();
+              },
+            }, 'Kapat')
+          : null),
+    ),
+  );
+}
+
 /* Ayarlar */
 
 function ayarlarEkrani() {
@@ -2032,6 +2202,13 @@ function ayarlarEkrani() {
         el('button', { type: 'button', sinif: 'ikincil', onclick: yedekIndir }, 'Yedeği indir'),
         el('label', { sinif: 'dosya' }, 'Yedekten yükle', el('input', { type: 'file', accept: 'application/json,.json', onchange: yedekYukle })),
       ),
+    ),
+    el(
+      'section',
+      { sinif: 'kart' },
+      el('h2', {}, 'Hatırlatmalar'),
+      el('p', { sinif: 'ipucu' }, veri.bildirim?.telefon ? 'Telefon bildirimi açık.' : 'Hatırlatmalar uygulamayı açınca görünür.'),
+      el('button', { type: 'button', sinif: 'ikincil', onclick: hatirlatmaEkrani }, 'Hatırlatma ayarları'),
     ),
     el(
       'section',
@@ -2206,6 +2383,8 @@ function baslat() {
   }
   veri = kayitli;
   piyasaBaslat();
+  planYaz();
+  gosterilenleriAl();
   return veri ? anaEkran() : kurulumEkrani();
 }
 
@@ -2216,6 +2395,7 @@ window.addEventListener('beforeinstallprompt', (olay) => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  gosterilenleriAl();
   if (kok.querySelector('#ana-para')) anaEkran();
   if (Date.now() - (piyasaKaydi?.alindi ?? 0) > YENILEME_SURESI) piyasaYenile();
 });

@@ -83,6 +83,24 @@ function birikimlerGecerli(birikimler) {
   );
 }
 
+function bildirimGecerli(b) {
+  if (b === undefined) return true;
+  const saat = /^([01]\d|2[0-3]):[0-5]\d$/;
+  return (
+    typeof b === 'object' &&
+    b !== null &&
+    Number.isInteger(b.gunOnce) &&
+    b.gunOnce >= 0 &&
+    b.gunOnce <= 7 &&
+    saat.test(b.saat) &&
+    saat.test(b.gunSonuSaat) &&
+    typeof b.maas === 'boolean' &&
+    typeof b.gunSonu === 'boolean' &&
+    (b.telefon === undefined || typeof b.telefon === 'boolean') &&
+    (b.altSinir === undefined || (Number.isSafeInteger(b.altSinir) && b.altSinir > 0))
+  );
+}
+
 function kategorilerGecerli(kategoriler) {
   if (kategoriler === undefined) return true;
   return (
@@ -132,7 +150,7 @@ export function veriGecerliMi(veri) {
 
   if (!faturalarGecerli(veri.faturalar) || !kategorilerGecerli(veri.kategoriler)) return false;
   if (!ortakKisiGecerli(veri.ortakKisi) || !kategorilerGecerli(veri.kaynaklar)) return false;
-  if (!taksitlerGecerli(veri.taksitler) || !birikimlerGecerli(veri.birikimler)) return false;
+  if (!taksitlerGecerli(veri.taksitler) || !birikimlerGecerli(veri.birikimler) || !bildirimGecerli(veri.bildirim)) return false;
   if (!veri.donemler || typeof veri.donemler !== 'object') return false;
   return Object.entries(veri.donemler).every(
     ([tarih, donem]) => TARIH.test(tarih) && Number.isSafeInteger(donem?.para) && hareketlerGecerli(donem.hareketler),

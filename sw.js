@@ -1,4 +1,6 @@
-const SURUM = 'cuzdan-10';
+const SURUM = 'cuzdan-11';
+const BILDIRIM = 'cuzdan-bildirim';
+const EN_ESKI = 2 * 24 * 60 * 60 * 1000;
 const DOSYALAR = [
   './',
   './index.html',
@@ -13,6 +15,7 @@ const DOSYALAR = [
   './birikim.js',
   './piyasa.js',
   './hesap.js',
+  './bildirim.js',
   './manifest.webmanifest',
   './ikon/ikon-180.png',
   './ikon/ikon-192.png',
@@ -28,7 +31,7 @@ self.addEventListener('activate', (olay) => {
   olay.waitUntil(
     caches
       .keys()
-      .then((adlar) => Promise.all(adlar.filter((ad) => ad !== SURUM).map((ad) => caches.delete(ad))))
+      .then((adlar) => Promise.all(adlar.filter((ad) => ad !== SURUM && ad !== BILDIRIM).map((ad) => caches.delete(ad))))
       .then(() => self.clients.claim()),
   );
 });
@@ -45,5 +48,36 @@ self.addEventListener('fetch', (olay) => {
         return cevap;
       })
       .catch(() => caches.match(olay.request)),
+  );
+});
+
+async function jsonOku(onbellek, ad) {
+  const cevap = await onbellek.match(ad);
+  return cevap ? cevap.json() : [];
+}
+
+// Uygulama kapalıyken telefonun izin verdiği aralıklarla çalışır; plan uygulama açıkken yazılır.
+async function hatirlat() {
+  const onbellek = await caches.open(BILDIRIM);
+  const plan = await jsonOku(onbellek, 'bildirim-plan');
+  const gosterilen = await jsonOku(onbellek, 'bildirim-gosterilen');
+  const simdi = Date.now();
+  const gelen = plan.filter((k) => k.zaman <= simdi && k.zaman > simdi - EN_ESKI && !gosterilen.includes(k.anahtar));
+  for (const kalem of gelen) {
+    await self.registration.showNotification(kalem.baslik, { body: kalem.metin, tag: kalem.anahtar, icon: 'ikon/ikon-192.png' });
+  }
+  if (gelen.length) {
+    await onbellek.put('bildirim-gosterilen', new Response(JSON.stringify([...gosterilen, ...gelen.map((k) => k.anahtar)].slice(-300))));
+  }
+}
+
+self.addEventListener('periodicsync', (olay) => {
+  if (olay.tag === 'cuzdan-hatirlat') olay.waitUntil(hatirlat());
+});
+
+self.addEventListener('notificationclick', (olay) => {
+  olay.notification.close();
+  olay.waitUntil(
+    self.clients.matchAll({ type: 'window' }).then((pencereler) => pencereler[0]?.focus() ?? self.clients.openWindow('./')),
   );
 });

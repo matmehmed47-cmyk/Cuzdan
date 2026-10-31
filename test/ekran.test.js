@@ -677,3 +677,44 @@ test('hesap makinesi: ekran, son işlemler, harcamaya aktarma, formu bozmadan ak
   );
   assert.equal(document.getElementById('ana-para').textContent, '900,00 TL');
 });
+
+test('hatırlatma kartı ana ekranda çıkar, Tamam deyince kaybolur, ayarlar kaydolur', async () => {
+  const ayar = ilkAyar(15);
+  const bugun = bugunTR();
+  const baslangic = donemBul(ayar, bugun).baslangic;
+  const window = await uygulamaAc(JSON.stringify({
+    surum: 1,
+    ad: 'Ev',
+    ayar,
+    bildirim: { gunOnce: 0, saat: '00:00', maas: false, gunSonu: true, gunSonuSaat: '00:00' },
+    donemler: { [baslangic]: { para: 100000 } },
+  }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+
+  assert.match(metin(window), /Bugünkü harcamaları girdin mi/);
+  dugme('Tamam').click();
+  assert.doesNotMatch(metin(window), /Bugünkü harcamaları girdin mi/);
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  dugme('Hatırlatma ayarları').click();
+  assert.match(metin(window), /Bu cihaz telefon bildirimini desteklemiyor/);
+  document.getElementById('gun-once').value = '5';
+  document.getElementById('saat').value = '10:30';
+  document.getElementById('alt-sinir').value = 'yanlış';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Sıfırdan büyük bir tutar/);
+  document.getElementById('alt-sinir').value = '1.000';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().bildirim.gunOnce, 5);
+  assert.equal(kayit().bildirim.saat, '10:30');
+  assert.equal(kayit().bildirim.altSinir, 100000);
+});
+
+test('hatırlatma ayarı yoksa da açılır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100 } } }));
+  assert.match(metin(window), /Serbest para/);
+});
