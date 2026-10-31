@@ -1,0 +1,209 @@
+:root {
+  color-scheme: light;
+  --zemin: #f4f6f4;
+  --yuzey: #ffffff;
+  --yazi: #16201d;
+  --soluk: #55645f;
+  --cizgi: #d7dfdb;
+  --ana: #176b5b;
+  --ana-yazi: #ffffff;
+  --vurgu-zemin: #e4f2ee;
+  --hata: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --zemin: #101513;
+    --yuzey: #1a211f;
+    --yazi: #eef3f1;
+    --soluk: #a7b5b0;
+    --cizgi: #33403b;
+    --ana: #6fd0bb;
+    --ana-yazi: #08221c;
+    --vurgu-zemin: #1d3530;
+    --hata: #ffb4ab;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --zemin: #101513;
+  --yuzey: #1a211f;
+  --yazi: #eef3f1;
+  --soluk: #a7b5b0;
+  --cizgi: #33403b;
+  --ana: #6fd0bb;
+  --ana-yazi: #08221c;
+  --vurgu-zemin: #1d3530;
+  --hata: #ffb4ab;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--zemin);
+  color: var(--yazi);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+main {
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+}
+
+h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 1.4rem;
+  overflow-wrap: anywhere;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+p {
+  margin: 0 0 8px;
+}
+
+ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.ust {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  margin-bottom: 16px;
+}
+
+.kart {
+  margin-bottom: 12px;
+  padding: 16px;
+  border: 1px solid var(--cizgi);
+  border-radius: 8px;
+  background: var(--yuzey);
+}
+
+.vurgulu {
+  background: var(--vurgu-zemin);
+}
+
+.etiket {
+  margin-bottom: 2px;
+  color: var(--soluk);
+  font-size: 0.9rem;
+}
+
+.tutar {
+  margin-bottom: 12px;
+  font-size: clamp(1.9rem, 9vw, 2.6rem);
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.adim,
+.ipucu {
+  color: var(--soluk);
+  font-size: 0.9rem;
+}
+
+.orta {
+  text-align: center;
+}
+
+.hata {
+  color: var(--hata);
+  font-weight: 600;
+}
+
+form {
+  display: grid;
+  gap: 10px;
+}
+
+label {
+  font-weight: 600;
+}
+
+input:not([type="file"]),
+select {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--cizgi);
+  border-radius: 8px;
+  background: var(--yuzey);
+  color: var(--yazi);
+  font: inherit;
+}
+
+button,
+.dosya {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 16px;
+  border: 1px solid var(--ana);
+  border-radius: 8px;
+  background: var(--ana);
+  color: var(--ana-yazi);
+  font: inherit;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+
+button + button,
+button + .dosya {
+  margin-top: 8px;
+}
+
+button.ikincil,
+.dosya {
+  background: transparent;
+  color: var(--ana);
+}
+
+button.tehlike {
+  border-color: var(--hata);
+  background: transparent;
+  color: var(--hata);
+}
+
+button.simge {
+  flex: none;
+  width: 48px;
+  margin: 0;
+  padding: 0;
+  border-color: var(--cizgi);
+  background: var(--yuzey);
+  color: var(--yazi);
+  font-size: 1.35rem;
+}
+
+.dosya {
+  position: relative;
+}
+
+.dosya input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--ana);
+  outline-offset: 2px;
+}
