@@ -859,7 +859,7 @@ function taksitOdeFormu(kalem, donem, geri) {
         if (kurus === kalan) tamamlandi();
       },
     },
-    tutarAlani('tutar', 'Bu ay ne kadar ödedin?', kalem.kurus ? paraYaz(kalem.kurus) : ''),
+    tutarAlani('tutar', kalem.vade > donem.bitis ? `${ayYaz(kalem.ay)} ödemesi için ne kadar ödedin?` : 'Bu ay ne kadar ödedin?', kalem.kurus ? paraYaz(kalem.kurus) : ''),
     el('p', { sinif: 'ipucu' }, `Kalan borç: ${paraYaz(kalan)}. Farklı tutar ödediysen onu yaz, kalan taksitler yeniden hesaplanır.`),
     hata,
     el('button', { type: 'submit' }, 'Ödedim'),
@@ -891,7 +891,7 @@ function taksitKarti(taksit, donem, bugun) {
     el(
       'div',
       { sinif: 'kalem-dugme' },
-      siradaki && siradaki.vade <= donem.bitis
+      siradaki
         ? el('button', { type: 'button', sinif: 'kucuk', onclick: () => taksitOdeFormu(siradaki, donem, taksitlerEkrani) }, '✓ Ödedim')
         : null,
       el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => taksitDetayi(taksit.id) }, 'Ödeme geçmişi ve düzenle'),

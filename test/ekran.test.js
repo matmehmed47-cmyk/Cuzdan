@@ -57,6 +57,33 @@ test('kayıtlı fatura: bu dönemde olmayan ödeme tutar sorularak erken ödenir
   assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[donem.baslangic].hareketler.length, 0);
 });
 
+test('taksit: sıradaki ödeme bu dönemde olmasa da erken ödenir', async () => {
+  const bugun = bugunTR();
+  const ayar = ilkAyar(15);
+  const donem = donemBul(ayar, bugun);
+  const ilkAy = new Date(Date.parse(donem.bitis) + 86400000 * 32).toISOString().slice(0, 7);
+  const window = await uygulamaAc(JSON.stringify({
+    surum: 1,
+    ad: 'Ev',
+    ayar,
+    taksitler: [{ id: 't', ad: 'Tablet', tur: 'sabit', toplam: 2000000, sayi: 4, gun: 1, ilkAy }],
+    donemler: { [donem.baslangic]: { para: 1000000, hareketler: [] } },
+  }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  dugme('Ödemeler').click();
+  dugme('Taksitler').click();
+  dugme('✓ Ödedim').click();
+  assert.match(metin(window), /ödemesi için ne kadar ödedin/);
+  gonder(window, document.querySelector('form'));
+
+  const [hareket] = JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[donem.baslangic].hareketler;
+  assert.equal(hareket.ay, ilkAy);
+  assert.equal(hareket.kurus, 500000);
+  assert.match(metin(window), /1\/4/);
+});
+
 test('ilk kurulum: ad, maaş günü ve para ile ana ekrana gelir', async () => {
   const window = await uygulamaAc();
   const { document } = window;
