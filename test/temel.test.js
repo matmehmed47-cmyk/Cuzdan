@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import { hareketToplami, kalanPara, paraCoz, paraYaz, yaklasikAralik } from '../para.js';
 import { bugunTR, donemBul, ilkAyar, maasGunuDegistir, maasKaydir } from '../donem.js';
 import { veriGecerliMi, yedekCoz } from '../depo.js';
+import {
+  atlamaGeriAl,
+  ayAtla,
+  ayrilanTutar,
+  baslangicAyi,
+  donemKalemleri,
+  faturaGuncelle,
+  faturaOde,
+  faturaSil,
+  odemeGeriAl,
+} from '../fatura.js';
 
 test('para: Türkçe yazımları doğru çözer', () => {
   const ornekler = [
@@ -112,4 +123,106 @@ test('kalan para gelir ve harcamayı hesaba katar', () => {
   assert.equal(hareketToplami(donem, 'harcama'), 30000);
   assert.equal(kalanPara({ para: 100 }), 100);
   assert.deepEqual(yaklasikAralik(420000), [400000, 450000]);
+});
+
+const faturaVerisi = (faturalar) => ({
+  surum: 1,
+  ad: 'Ev',
+  ayar: ilkAyar(15),
+  faturalar,
+  donemler: { '2026-10-15': { para: 1000000, hareketler: [] } },
+});
+const kira = { id: 'a', ad: 'Kira', tur: 'sabit', gun: 1, kurus: 500000, ilkAy: '2026-11' };
+const elektrik = { id: 'b', ad: 'Elektrik', tur: 'degisken', gun: 20, ilkAy: '2026-10' };
+const BUGUN = '2026-10-31';
+const donem = donemBul(ilkAyar(15), BUGUN);
+
+test('fatura: bekleyen tutar ayrılır, ödeyince paradan düşer, ayrılan sıfırlanır', () => {
+  const veri = faturaVerisi([kira]);
+  const [kalem] = donemKalemleri(veri, donem, BUGUN);
+  assert.equal(kalem.vade, '2026-11-01');
+  assert.equal(kalem.durum, 'bekliyor');
+  assert.equal(ayrilanTutar([kalem]), 500000);
+
+  const odendi = faturaOde(veri, donem.baslangic, kalem, kalem.kurus, BUGUN);
+  assert.equal(kalanPara(odendi.donemler[donem.baslangic]), 500000);
+  const sonra = donemKalemleri(odendi, donem, BUGUN);
+  assert.equal(sonra[0].durum, 'odendi');
+  assert.equal(ayrilanTutar(sonra), 0);
+
+  assert.equal(faturaOde(odendi, donem.baslangic, kalem, kalem.kurus, BUGUN), odendi);
+  const geri = odemeGeriAl(odendi, donem.baslangic, kalem);
+  assert.equal(kalanPara(geri.donemler[donem.baslangic]), 1000000);
+  assert.equal(donemKalemleri(geri, donem, BUGUN)[0].durum, 'bekliyor');
+});
+
+test('fatura: değişken tutar belli değilse ayrılan değişmez, gerçek tutar kaydedilir', () => {
+  const veri = faturaVerisi([elektrik]);
+  const [kalem] = donemKalemleri(veri, donem, BUGUN);
+  assert.equal(kalem.kurus, null);
+  assert.equal(kalem.durum, 'gecikti');
+  assert.equal(ayrilanTutar([kalem]), 0);
+  const odendi = faturaOde(veri, donem.baslangic, kalem, 75000, BUGUN);
+  assert.equal(donemKalemleri(odendi, donem, BUGUN)[0].kurus, 75000);
+});
+
+test('fatura: ödenmeyen sonraki döneme geçer, ödenen bir daha çıkmaz', () => {
+  const veri = faturaVerisi([kira]);
+  const yeniBugun = '2026-11-20';
+  const yeniDonem = donemBul(ilkAyar(15), yeniBugun);
+  veri.donemler[yeniDonem.baslangic] = { para: 0, hareketler: [] };
+
+  const kalemler = donemKalemleri(veri, yeniDonem, yeniBugun);
+  assert.deepEqual(kalemler.map((k) => [k.ay, k.durum]), [['2026-11', 'gecikti'], ['2026-12', 'bekliyor']]);
+
+  const odendi = faturaOde(veri, donem.baslangic, kalemler[0], 500000, yeniBugun);
+  assert.deepEqual(donemKalemleri(odendi, yeniDonem, yeniBugun).map((k) => k.ay), ['2026-12']);
+});
+
+test('fatura: "bu ay yok" ayrılanı azaltır, geri alınabilir', () => {
+  const veri = faturaVerisi([kira]);
+  const atlandi = ayAtla(veri, 'a', '2026-11');
+  const kalemler = donemKalemleri(atlandi, donem, BUGUN);
+  assert.equal(kalemler[0].durum, 'atlandi');
+  assert.equal(ayrilanTutar(kalemler), 0);
+  assert.equal(donemKalemleri(atlamaGeriAl(atlandi, 'a', '2026-11'), donem, BUGUN)[0].durum, 'bekliyor');
+});
+
+test('fatura: düzenleme önceki ödemeyi değiştirmez, gün değişince aynı ay tekrar çıkmaz', () => {
+  const veri = faturaVerisi([kira]);
+  const [kalem] = donemKalemleri(veri, donem, BUGUN);
+  const odendi = faturaOde(veri, donem.baslangic, kalem, kalem.kurus, BUGUN);
+  const degisti = faturaGuncelle(odendi, 'a', { kurus: 600000, gun: 5 });
+  const kalemler = donemKalemleri(degisti, donem, BUGUN);
+  assert.equal(kalemler.length, 1);
+  assert.equal(kalemler[0].durum, 'odendi');
+  assert.equal(kalemler[0].kurus, 500000);
+});
+
+test('fatura: silinince ödenmiş kayıt dönemde kalır', () => {
+  const veri = faturaVerisi([kira]);
+  const [kalem] = donemKalemleri(veri, donem, BUGUN);
+  const silindi = faturaSil(faturaOde(veri, donem.baslangic, kalem, kalem.kurus, BUGUN), 'a');
+  assert.deepEqual(donemKalemleri(silindi, donem, BUGUN), []);
+  assert.equal(hareketToplami(silindi.donemler[donem.baslangic], 'fatura'), 500000);
+  assert.equal(veriGecerliMi(silindi), true);
+});
+
+test('fatura: kısa ayda son gün, ilk ödeme ayı seçimi', () => {
+  const subat = donemBul(ilkAyar(15), '2027-02-20');
+  const veri = faturaVerisi([{ ...kira, gun: 31, ilkAy: '2027-02' }]);
+  assert.equal(donemKalemleri(veri, subat, '2027-02-20')[0].vade, '2027-02-28');
+
+  assert.deepEqual(baslangicAyi(20, BUGUN, donem.baslangic), { ilkAy: '2026-11', gecmisAy: '2026-10', gecmisTarih: '2026-10-20' });
+  assert.equal(baslangicAyi(31, BUGUN, donem.baslangic).ilkAy, '2026-10');
+  assert.equal(baslangicAyi(5, BUGUN, donem.baslangic).gecmisAy, null);
+});
+
+test('fatura: yedek doğrulaması bozuk faturayı reddeder, eski yedeği kabul eder', () => {
+  const eski = { surum: 1, ad: 'Ev', ayar: ilkAyar(15), donemler: {} };
+  assert.equal(veriGecerliMi(eski), true);
+  assert.equal(veriGecerliMi({ ...eski, faturalar: [kira, elektrik] }), true);
+  assert.equal(veriGecerliMi({ ...eski, faturalar: [{ ...kira, kurus: undefined }] }), false);
+  assert.equal(veriGecerliMi({ ...eski, faturalar: [{ ...kira, ilkAy: '2020-13' }] }), false);
+  assert.equal(veriGecerliMi({ ...eski, faturalar: [{ ...kira, gun: 32 }] }), false);
 });

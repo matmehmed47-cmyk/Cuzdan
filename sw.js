@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-2';
+const SURUM = 'cuzdan-3';
 const DOSYALAR = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const DOSYALAR = [
   './para.js',
   './donem.js',
   './depo.js',
+  './fatura.js',
   './manifest.webmanifest',
   './ikon/ikon-180.png',
   './ikon/ikon-192.png',

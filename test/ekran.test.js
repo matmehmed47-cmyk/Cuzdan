@@ -142,6 +142,70 @@ test('harcama ve gelir parayı değiştirir, düzeltme geçmişi korur', async (
   assert.doesNotMatch(metin(window), /2026 dönemi/);
 });
 
+test('fatura eklenir, serbest para azalır, ödenince geri alınabilir', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100000, hareketler: [] } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  assert.match(metin(window), /Henüz fatura eklemedin/);
+  dugme('Faturalar').click();
+  dugme('+ Fatura ekle').click();
+
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Faturaya bir ad yaz/);
+  document.getElementById('ad').value = 'İnternet';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Ödeme gününü seç/);
+  const gun = document.getElementById('gun');
+  gun.value = bugunTR().slice(8).replace(/^0/, '');
+  gun.dispatchEvent(new window.Event('change'));
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Sabit fatura için tutar yaz/);
+  document.getElementById('tutar').value = '300';
+  gonder(window, document.querySelector('form'));
+
+  const eklenen = JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+  assert.equal(eklenen.faturalar.length, 1);
+  assert.equal(eklenen.faturalar[0].kurus, 30000);
+
+  dugme('✓ Ödedim').click();
+  assert.match(metin(window), /✓ Ödendi/);
+  assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[baslangic].hareketler[0].kurus, 30000);
+
+  dugme('Geri al').click();
+  assert.match(metin(window), /Bugün/);
+  assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[baslangic].hareketler.length, 0);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.equal(document.getElementById('ana-para').textContent, '700,00 TL');
+  assert.match(metin(window), /Faturalara ayrıldı300,00 TL/);
+  assert.match(metin(window), /Toplam para1\.000,00 TL/);
+});
+
+test('değişken fatura ödenirken tutar sorulur, Geçmiş\'te görünür', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const gun = Number(bugunTR().slice(8));
+  const faturalar = [{ id: 'x', ad: 'Elektrik', tur: 'degisken', gun, ilkAy: bugunTR().slice(0, 7) }];
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, faturalar, donemler: { '2000-01-15': { para: 500, hareketler: [{ tur: 'fatura', kurus: 100, tarih: '2000-01-20', faturaId: 'x', ay: '2000-01', ad: 'Eski' }] }, [baslangic]: { para: 100000, hareketler: [] } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  assert.match(metin(window), /1 faturanın tutarı henüz belli değil/);
+  dugme('✓ Ödedim').click();
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Sıfırdan büyük/);
+  document.getElementById('tutar').value = '250';
+  gonder(window, document.querySelector('form'));
+  assert.equal(document.getElementById('ana-para').textContent, '750,00 TL');
+  assert.match(metin(window), /Bu dönem bekleyen ödeme yok/);
+
+  dugme('Geçmiş dönemler').click();
+  assert.match(metin(window), /✓ Eski: 1,00 TL/);
+});
+
 test('para eksiye düşerse açıkça yazar', async () => {
   const ayar = ilkAyar(15);
   const baslangic = donemBul(ayar, bugunTR()).baslangic;

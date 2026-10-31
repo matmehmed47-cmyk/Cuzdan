@@ -225,6 +225,42 @@ button.simge {
   margin-top: 12px;
 }
 
+.kalem {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--cizgi);
+}
+
+.kalem .satir {
+  margin-bottom: 2px;
+}
+
+.kalem .ikili {
+  margin: 8px 0 0;
+}
+
+.gecikti {
+  color: var(--yazi);
+  font-weight: 600;
+}
+
+.secim {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 400;
+}
+
+.secim[hidden] {
+  display: none;
+}
+
+.secim input {
+  flex: none;
+  width: 22px;
+  min-height: 22px;
+  margin: 0;
+}
+
 :focus-visible {
   outline: 3px solid var(--ana);
   outline-offset: 2px;

@@ -1,5 +1,10 @@
 const ANAHTAR = 'cuzdan.v1';
 const TARIH = /^\d{4}-\d{2}-\d{2}$/;
+const AY = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function faturaHareketi(h) {
+  return h?.tur === 'fatura' && typeof h.faturaId === 'string' && AY.test(h.ay) && typeof h.ad === 'string';
+}
 
 function hareketlerGecerli(hareketler) {
   if (hareketler === undefined) return true;
@@ -7,10 +12,33 @@ function hareketlerGecerli(hareketler) {
     Array.isArray(hareketler) &&
     hareketler.every(
       (h) =>
-        (h?.tur === 'harcama' || h?.tur === 'gelir') &&
+        (h?.tur === 'harcama' || h?.tur === 'gelir' || faturaHareketi(h)) &&
         TARIH.test(h.tarih) &&
         Number.isSafeInteger(h.kurus) &&
         h.kurus > 0,
+    )
+  );
+}
+
+function faturalarGecerli(faturalar) {
+  if (faturalar === undefined) return true;
+  return (
+    Array.isArray(faturalar) &&
+    faturalar.every(
+      (f) =>
+        typeof f?.id === 'string' &&
+        f.id &&
+        typeof f.ad === 'string' &&
+        f.ad.trim() &&
+        f.ad.length <= 40 &&
+        (f.tur === 'sabit' || f.tur === 'degisken') &&
+        Number.isInteger(f.gun) &&
+        f.gun >= 1 &&
+        f.gun <= 31 &&
+        AY.test(f.ilkAy) &&
+        (f.kurus === undefined || (Number.isSafeInteger(f.kurus) && f.kurus > 0)) &&
+        (f.tur === 'degisken' || f.kurus !== undefined) &&
+        (f.atlanan === undefined || (Array.isArray(f.atlanan) && f.atlanan.every((a) => AY.test(a)))),
     )
   );
 }
@@ -31,6 +59,7 @@ export function veriGecerliMi(veri) {
   );
   if (!kaydirmaDogru) return false;
 
+  if (!faturalarGecerli(veri.faturalar)) return false;
   if (!veri.donemler || typeof veri.donemler !== 'object') return false;
   return Object.entries(veri.donemler).every(
     ([tarih, donem]) => TARIH.test(tarih) && Number.isSafeInteger(donem?.para) && hareketlerGecerli(donem.hareketler),
