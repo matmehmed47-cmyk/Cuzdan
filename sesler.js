@@ -9,6 +9,10 @@ export function sesAyarla(durum) {
   acik = durum;
 }
 
+export function sesCalabilirMi() {
+  return acik && Boolean(window.AudioContext ?? window.webkitAudioContext);
+}
+
 async function hazirla() {
   const Baglam = window.AudioContext ?? window.webkitAudioContext;
   if (!Baglam || !window.fetch) return false;

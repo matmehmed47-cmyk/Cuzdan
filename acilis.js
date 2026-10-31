@@ -1,7 +1,7 @@
 // Açılış: önce logo parça parça kurulup kaybolur, sonra imza tek başına yazılır. Dokununca hemen geçilir.
 
 import { IMZA } from './imza.js';
-import { sesCal } from './sesler.js';
+import { sesCal, sesCalabilirMi } from './sesler.js';
 
 const SURE = 3900;
 const KISA_SURE = 900;
@@ -41,12 +41,14 @@ export function acilisGoster() {
   perde.className = 'acilis';
   perde.setAttribute('role', 'img');
   perde.setAttribute('aria-label', 'Cüzdan, Mehmetnur Özkoç');
-  perde.innerHTML = `<div class="a-sahne a-sahne-logo">${LOGO}</div><div class="a-sahne a-sahne-imza">${imzaYolu()}<p class="a-ad">Mehmetnur Özkoç</p></div>`;
+  perde.innerHTML = `<div class="a-sahne a-sahne-logo">${LOGO}</div><div class="a-sahne a-sahne-imza">${imzaYolu()}<p class="a-ad">Mehmetnur Özkoç</p></div><p class="a-dokun" hidden>Sesi duymak için dokun</p>`;
 
-  // Sikke cepten çıkarken çalar; tarayıcı izin vermezse ilk dokunuşta denenir.
+  // Sikke cepten çıkarken çalar. Telefon dokunuşsuz sese izin vermezse yazı çıkar, dokununca çalar ve açılış sürer.
+  const ipucu = perde.querySelector('.a-dokun');
   let calindi = false;
   const sesDene = async () => {
-    if (!calindi) calindi = await sesCal('acilis');
+    calindi = await sesCal('acilis');
+    ipucu.hidden = calindi || !sesCalabilirMi();
   };
   const sesSayaci = setTimeout(sesDene, SES_ANI);
   sesSayaci.unref?.();
@@ -61,8 +63,9 @@ export function acilisGoster() {
     sil.unref?.();
   };
   perde.addEventListener('click', () => {
+    if (ipucu.hidden) return kapat();
+    ipucu.hidden = true;
     sesDene();
-    kapat();
   });
   const sayac = setTimeout(kapat, sade ? KISA_SURE : SURE);
   sayac.unref?.();
