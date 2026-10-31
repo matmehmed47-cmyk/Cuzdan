@@ -111,6 +111,29 @@ test('çan: basınca fatura hatırlatmadan çıkar, yeniden basınca döner', as
   assert.equal(zil().getAttribute('aria-pressed'), 'true');
 });
 
+test('bildirimi kontrol et: hesap yoksa nerede takıldığını söyler', async (t) => {
+  const ayar = ilkAyar(15);
+  const { baslangic } = donemBul(ayar, bugunTR());
+  Object.defineProperty(globalThis.navigator, 'serviceWorker', { configurable: true, value: { register: async () => ({}) } });
+  t.after(() => { delete globalThis.navigator.serviceWorker; });
+  const window = await uygulamaAc(JSON.stringify({
+    surum: 1,
+    ad: 'Ev',
+    ayar,
+    bildirim: { gunOnce: 3, saat: '09:00', maas: true, gunSonu: false, gunSonuSaat: '21:00', telefon: true },
+    donemler: { [baslangic]: { para: 100000, hareketler: [] } },
+  }), (w) => { w.Notification = { permission: 'granted' }; });
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  dugme('Hatırlatma ayarları').click();
+  dugme('Bildirimi kontrol et').click();
+  await new Promise((bitti) => { setTimeout(bitti, 0); });
+  assert.match(metin(window), /✓ Bildirim izni var/);
+  assert.match(metin(window), /✗ Hesap yok/);
+});
+
 test('ilk kurulum: ad, maaş günü ve para ile ana ekrana gelir', async () => {
   const window = await uygulamaAc();
   const { document } = window;

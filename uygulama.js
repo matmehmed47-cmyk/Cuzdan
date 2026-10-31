@@ -2912,6 +2912,7 @@ function hatirlatmaEkrani() {
   const gunSonuSaat = el('input', { id: 'gun-sonu-saat', type: 'time', value: ayar.gunSonuSaat });
   const [sinirEtiketi, sinirKutusu] = tutarAlani('alt-sinir', 'Serbest para şunun altına inince söyle (isteğe bağlı)', ayar.altSinir ? paraYaz(ayar.altSinir) : '');
   const durum = el('p', { sinif: 'ipucu', role: 'status' }, telefonDurumu());
+  const kontrol = el('div', { role: 'status' });
 
   function telefonDurumu() {
     if (!destek) return iphone ? 'iPhone’da önce uygulamayı ana ekrana eklemelisin.' : 'Bu cihaz telefon bildirimini desteklemiyor.';
@@ -2933,6 +2934,31 @@ function hatirlatmaEkrani() {
 
   async function denemeGonder() {
     (await navigator.serviceWorker.ready).showNotification('Cüzdan', { body: 'Deneme bildirimi. Hatırlatmalar böyle görünecek.', icon: 'ikon/ikon-192.png' });
+  }
+
+  // Hangi adımda takıldığını gösterir; son adımda sunucudan gerçek bir bildirim ister.
+  async function bildirimKontrol() {
+    kontrol.replaceChildren();
+    const yaz = (metin) => kontrol.append(el('p', { sinif: 'ipucu' }, metin));
+    if (window.Notification.permission !== 'granted') {
+      yaz('✗ Bildirim izni yok');
+      return yaz('Telefonun ayarlarından Cüzdan için bildirimi aç.');
+    }
+    yaz('✓ Bildirim izni var');
+    if (!oturum()) {
+      yaz('✗ Hesap yok');
+      return yaz('Uygulama kapalıyken bildirim gelmesi için Ayarlar\'dan hesap aç.');
+    }
+    yaz('✓ Hesap açık');
+    try {
+      if (!(await telefonAbonesi())) return yaz('✗ Bu cihaz sunucu bildirimini desteklemiyor.');
+      yaz('✓ Telefon sunucuya kayıtlı');
+      await planGonder([...(guncelPlan() ?? []), { anahtar: `deneme:${Date.now()}`, zaman: Date.now(), baslik: 'Cüzdan', metin: 'Sunucudan deneme bildirimi. Bildirimlerin çalışıyor.' }]);
+      yaz('✓ Deneme sunucuya gönderildi');
+      yaz('Uygulamayı kapat. 5 dakika içinde bildirim gelmeli.');
+    } catch (h) {
+      yaz(`✗ Hata: ${h?.message ?? h}`);
+    }
   }
 
   const form = el(
@@ -2986,6 +3012,9 @@ function hatirlatmaEkrani() {
           ? el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: denemeGonder }, 'Deneme bildirimi')
           : null,
         destek && ayar.telefon
+          ? el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: bildirimKontrol }, 'Bildirimi kontrol et')
+          : null,
+        destek && ayar.telefon
           ? el('button', {
               type: 'button',
               sinif: 'ikincil kucuk',
@@ -2996,6 +3025,7 @@ function hatirlatmaEkrani() {
               },
             }, 'Kapat')
           : null),
+      kontrol,
     ),
   );
 }
