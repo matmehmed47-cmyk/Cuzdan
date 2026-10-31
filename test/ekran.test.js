@@ -993,3 +993,50 @@ test('O bölümü: alacak-verecek, masraf planı, kira, sürpriz harcama', async
   assert.equal(kayit().faturalar[0].oran, 3149);
   assert.match(metin(window), /Yenileme: Mart · Yeni kira yaklaşık 39\.447,00 TL/);
 });
+
+test('hareketler ekranı: hepsi tek yerde, filtre, düzeltme, geçmiş dönem', async () => {
+  const ayar = ilkAyar(15);
+  const bugun = bugunTR();
+  const baslangic = donemBul(ayar, bugun).baslangic;
+  const window = await uygulamaAc(JSON.stringify({
+    surum: 1,
+    ad: 'Ev',
+    ayar,
+    donemler: {
+      '2000-01-15': { para: 500, hareketler: [{ tur: 'harcama', kurus: 200, tarih: '2000-01-16', kategori: 'Eski' }] },
+      [baslangic]: { para: 1000000, hareketler: [
+        { tur: 'harcama', kurus: 250000, tarih: bugun, kategori: 'Market', not: 'Haftalık' },
+        { tur: 'gelir', kurus: 200000, tarih: bugun, kaynak: 'Ek ders' },
+        { tur: 'fatura', kurus: 85000, tarih: bugun, ad: 'Elektrik', faturaId: 'f', ay: bugun.slice(0, 7) },
+      ] },
+    },
+  }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const satir = (m) => [...document.querySelectorAll('.hareket')].find((d) => d.textContent.includes(m));
+
+  dugme('Bu ayki hareketler').click();
+  assert.match(metin(window), /Giren2\.000,00 TL/);
+  assert.match(metin(window), /Çıkan3\.350,00 TL/);
+  assert.match(metin(window), /− 2\.500,00 TL/);
+  assert.match(metin(window), /\+ 2\.000,00 TL/);
+  assert.equal(satir('Elektrik').tagName, 'DIV');
+
+  dugme('Ödeme').click();
+  assert.ok(satir('Elektrik'));
+  assert.equal(satir('Market'), undefined);
+  dugme('Birikim').click();
+  assert.match(metin(window), /Bu dönemde kayıt yok/);
+
+  dugme('Hepsi').click();
+  satir('Market').click();
+  document.getElementById('tutar').value = '3.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /− 3\.000,00 TL/);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  dugme('Geçmiş dönemler').click();
+  dugme('Hareketleri gör').click();
+  assert.match(metin(window), /Eski/);
+  assert.equal(satir('Eski').tagName, 'DIV');
+});

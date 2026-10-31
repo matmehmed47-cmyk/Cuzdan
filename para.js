@@ -1,6 +1,7 @@
 // Para her yerde kuruş olarak tam sayı tutulur; ondalık hata oluşmaz.
 
 const EN_BUYUK = 999999999999;
+export const GIREN_TURLER = ['gelir', 'satis', 'tahsil'];
 
 export function paraCoz(metin) {
   const temiz = String(metin ?? '').replace(/₺|tl|\s/gi, '');
@@ -33,7 +34,7 @@ export function paraYaz(kurus) {
 
 export function kalanPara(donem) {
   return (donem.hareketler ?? []).reduce(
-    (toplam, h) => toplam + (['gelir', 'satis', 'tahsil'].includes(h.tur) ? h.kurus : -h.kurus),
+    (toplam, h) => toplam + (GIREN_TURLER.includes(h.tur) ? h.kurus : -h.kurus),
     donem.para,
   );
 }

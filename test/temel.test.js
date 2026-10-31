@@ -781,3 +781,24 @@ test('yeni kayıt türleri yedekte doğrulanır', () => {
   assert.equal(veriGecerliMi({ ...temel, faturalar: [{ id: 'f', ad: 'Kira', tur: 'sabit', gun: 5, ilkAy: '2026-11', kurus: 1, cesit: 'kira', yenileme: 13 }] }), false);
   assert.equal(veriGecerliMi({ ...temel, donemler: { '2026-11-15': { para: 1, hareketler: [{ tur: 'tahsil', kurus: 5, tarih: '2026-11-16', defterId: 'd', ad: 'Ali' }] } } }), true);
 });
+
+test('hareketler: sıra, gruplar, giren ve çıkan', async () => {
+  const { gunlereAyir, hareketListesi, hareketToplamlari } = await import('../hareket.js');
+  const kayit = { para: 1000, hareketler: [
+    { tur: 'harcama', kurus: 100, tarih: '2026-11-16' },
+    { tur: 'gelir', kurus: 500, tarih: '2026-11-18' },
+    { tur: 'fatura', kurus: 200, tarih: '2026-11-17', ad: 'Su' },
+    { tur: 'harcama', kurus: 50, tarih: '2026-11-18' },
+    { tur: 'satis', kurus: 70, tarih: '2026-11-15', ad: 'Altın' },
+    { tur: 'tahsil', kurus: 30, tarih: '2026-11-15', ad: 'Ali' },
+    { tur: 'defter', kurus: 40, tarih: '2026-11-15', ad: 'Abim' },
+  ] };
+  assert.deepEqual(hareketListesi(kayit).map((h) => h.kurus), [50, 500, 200, 100, 40, 30, 70]);
+  assert.equal(hareketListesi(kayit)[0].sira, 3);
+  assert.deepEqual(hareketListesi(kayit, 'odeme').map((h) => h.kurus), [200]);
+  assert.deepEqual(hareketListesi(kayit, 'borc').map((h) => h.kurus), [40, 30]);
+  assert.deepEqual(hareketToplamlari(kayit), { giren: 600, cikan: 390 });
+  assert.equal(kalanPara(kayit), 1000 + 600 - 390);
+  assert.deepEqual(gunlereAyir(hareketListesi(kayit)).map(([g, l]) => [g, l.length]), [['2026-11-18', 2], ['2026-11-17', 1], ['2026-11-16', 1], ['2026-11-15', 3]]);
+  assert.deepEqual(hareketListesi({ para: 1 }), []);
+});

@@ -1346,3 +1346,51 @@ button.hesap-gecmis + button.hesap-gecmis {
 .alanlar[hidden] {
   display: none;
 }
+
+/* Hareketler */
+
+.hareket {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--cizgi);
+  border-radius: 0;
+  background: transparent;
+  color: var(--yazi);
+  font-weight: 400;
+  text-align: left;
+}
+
+.hareket:last-child {
+  border-bottom: 0;
+}
+
+button.hareket + button.hareket {
+  margin: 0;
+}
+
+.hareket-ad {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hareket-tutar {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hareket-tutar.giren {
+  color: var(--artis);
+}
+
+.hero button.hayalet.bosluk {
+  margin-top: 12px;
+}

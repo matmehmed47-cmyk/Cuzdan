@@ -107,6 +107,7 @@ import {
 } from './bildirim.js';
 import { kenardaPara, planAyir, planDurumu, planEkle, planKapat } from './plan.js';
 import { defterDurumu, defterEkle, defterOde, defterOdemeSil, defterOzet, defterSil } from './defter.js';
+import { GRUPLAR, girenMi, gunlereAyir, hareketListesi, hareketToplamlari } from './hareket.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
 import { konusmaCoz } from './ses.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
@@ -462,6 +463,7 @@ function anaEkran() {
           belirsiz ? el('p', { sinif: 'ipucu' }, `${belirsiz} ödemenin tutarı henüz belli değil, hesaba katılmadı.`) : null,
           el('p', { sinif: 'ipucu' }, `Sonraki maaş: ${tarihYaz(donem.sonraki)} (${kalanGun} gün kaldı)`),
           kategoriCubugu(donemGunu - kalanGun, donemGunu),
+          el('button', { type: 'button', sinif: 'hayalet bosluk', onclick: () => hareketlerEkrani() }, ikon('gecmis'), 'Bu ayki hareketler'),
         ),
         el(
           'div',
@@ -973,7 +975,59 @@ function taksitFormu(mevcut = null) {
   goster(ustBolum(mevcut ? 'Taksiti düzenle' : 'Taksit ekle', mevcut ? () => taksitDetayi(mevcut.id) : taksitlerEkrani), form);
 }
 
+/* Bu ayki hareketler */
+
+function hareketSatiri(h, donem, yenile) {
+  const icerik = [
+    el('span', { sinif: 'hareket-ad' }, el('strong', {}, hareketYazisi(h)), el('span', { sinif: 'ipucu' }, [HAREKET_TURU[h.tur], h.not].filter(Boolean).join(' · '))),
+    el('span', { sinif: `hareket-tutar${girenMi(h) ? ' giren' : ''}` }, `${girenMi(h) ? '+' : '−'} ${paraYaz(h.kurus)}`),
+  ];
+  if (donem && h.tur === 'harcama') return el('button', { type: 'button', sinif: 'hareket', onclick: () => harcamaFormu(donem, h, yenile) }, icerik);
+  if (donem && h.tur === 'gelir') return el('button', { type: 'button', sinif: 'hareket', onclick: () => gelirFormu(donem, h, yenile) }, icerik);
+  return el('div', { sinif: 'hareket' }, icerik);
+}
+
+// Tarih verilirse geçmiş dönem salt okunur gösterilir.
+function hareketlerEkrani(tarih = null, grup = 'hepsi') {
+  const donem = donemBul(veri.ayar, bugunTR());
+  const baslangic = tarih ?? donem.baslangic;
+  const kayit = veri.donemler[baslangic];
+  if (!kayit) return anaEkran();
+
+  const yenile = () => hareketlerEkrani(null, grup);
+  const { giren, cikan } = hareketToplamlari(kayit);
+  const gunler = gunlereAyir(hareketListesi(kayit, grup));
+  goster(
+    ustBolum('Hareketler', tarih ? gecmisEkrani : anaEkran),
+    bilgiSatiri(),
+    el(
+      'section',
+      { sinif: 'hero' },
+      el('p', { sinif: 'etiket' }, tarih ? `${tarihYaz(tarih)} dönemi` : 'Bu dönem'),
+      degerler(['Giren', paraYaz(giren)], ['Çıkan', paraYaz(cikan)]),
+      el('p', { sinif: 'ipucu' }, `Dönem başı parası: ${paraYaz(kayit.para)} · Kalan: ${paraYaz(kalanPara(kayit))}`),
+    ),
+    el('div', { sinif: 'kategoriler' }, GRUPLAR.map(([kod, ad]) => el('button', {
+      type: 'button',
+      sinif: 'cip',
+      'aria-pressed': String(kod === grup),
+      onclick: () => hareketlerEkrani(tarih, kod),
+    }, ad))),
+    gunler.length
+      ? gunler.map(([gun, liste]) => el(
+          'section',
+          { sinif: 'kart bosluk' },
+          el('h2', {}, tarihYaz(gun)),
+          liste.map((h) => hareketSatiri(h, tarih ? null : donem, yenile)),
+        ))
+      : el('p', { sinif: 'ipucu orta bosluk' }, 'Bu dönemde kayıt yok.'),
+    tarih ? null : el('p', { sinif: 'ipucu orta bosluk' }, 'Harcama ve gelire dokunup düzeltebilirsin. Diğerleri kendi ekranından düzeltilir.'),
+  );
+}
+
 /* Takvim */
+
+const HAREKET_TURU = { harcama: 'Harcama', gelir: 'Gelir', fatura: 'Fatura ödendi', taksit: 'Taksit ödendi', birikim: 'Birikime gitti', satis: 'Birikim satışı', defter: 'Para verildi', tahsil: 'Para alındı' };
 
 function hareketYazisi(h) {
   if (h.tur === 'harcama') return h.kategori ?? DIGER;
@@ -1040,7 +1094,7 @@ function takvimEkrani(ay = bugunTR().slice(0, 7), secili = bugunTR()) {
         el('h2', {}, tarihYaz(gun.tarih)),
         gun.maas ? el('p', { sinif: 'ipucu' }, 'Maaş günü, yeni dönem başlıyor.') : null,
         gun.odemeler.map((k) => kalem(k.ad, k.kurus === null ? 'Tutar belli değil' : paraYaz(k.kurus), k.durum === 'gecikti' ? 'Gecikti' : 'Ödenecek', null, k.durum === 'gecikti' ? 'ipucu gecikti' : 'ipucu')),
-        gun.hareketler.map((h) => kalem(hareketYazisi(h), paraYaz(h.kurus), { harcama: 'Harcama', gelir: 'Gelir', fatura: 'Fatura ödendi', taksit: 'Taksit ödendi', birikim: 'Birikime gitti', satis: 'Birikim satışı', defter: 'Para verildi', tahsil: 'Para alındı' }[h.tur])),
+        gun.hareketler.map((h) => kalem(hareketYazisi(h), paraYaz(h.kurus), HAREKET_TURU[h.tur])),
         gun.maas || gun.odemeler.length || gun.hareketler.length ? null : el('p', { sinif: 'ipucu' }, 'Bu gün kayıt yok.'),
       ),
     ),
@@ -1650,6 +1704,9 @@ function gecmisEkrani() {
       el(
         'div',
         { sinif: 'kalem-dugme' },
+        kayit.hareketler?.length
+          ? el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => hareketlerEkrani(tarih) }, 'Hareketleri gör')
+          : null,
         hareketToplami(kayit, 'harcama')
           ? el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => harcamalarEkrani(tarih) }, 'Harcamaları gör')
           : null,
