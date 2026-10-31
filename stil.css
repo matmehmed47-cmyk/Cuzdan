@@ -633,6 +633,48 @@ button.kucuk .ikon svg {
   margin-top: 8px;
 }
 
+button.zil {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--cizgi);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--soluk);
+}
+
+.kalem:has(.zil) .kalem-dugme {
+  grid-column: 1 / -1;
+}
+
+.kalem-dugme .zil {
+  order: -1;
+  margin-right: auto;
+}
+
+button.zil.acik {
+  border-color: transparent;
+  background: var(--vurgu-zemin);
+  color: var(--ana);
+}
+
+button.zil .ikon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.baslik-sag {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
 .gecikti {
   color: var(--dusus);
   font-weight: 650;

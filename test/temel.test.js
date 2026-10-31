@@ -585,30 +585,49 @@ test('hatırlatma: tek ve net metin, önceden ve son gün', async () => {
   const { bildirimPlani, gelenler } = await import('../bildirim.js');
   const veri = ornekVeri();
   const plan = bildirimPlani(veri, ornekDonem, veri.donemler['2026-11-15'], '2026-11-16', { gunOnce: 1, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' }).filter((k) => k.anahtar.includes('2026-11'));
-  assert.deepEqual(plan.map((k) => k.anahtar), ['f:f1:2026-11:once', 'f:f1:2026-11:gun']);
+  assert.deepEqual(plan.map((k) => k.anahtar).slice(0, 2), ['ozet:2026-11-19', 'ozet:2026-11-20']);
   assert.equal(plan[0].metin, 'Yarın son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
   assert.equal(plan[1].metin, 'Bugün son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
   assert.equal(plan[0].zaman, Date.parse('2026-11-19T09:00:00+03:00'));
   const saatten = Date.parse('2026-11-19T08:59:00+03:00');
   assert.equal(gelenler(plan, saatten, []).length, 0);
   assert.equal(gelenler(plan, saatten + 60000, []).length, 1);
-  assert.equal(gelenler(plan, saatten + 60000, ['f:f1:2026-11:once']).length, 0);
+  assert.equal(gelenler(plan, saatten + 60000, ['ozet:2026-11-19']).length, 0);
 });
 
-test('hatırlatma: ödenince durur, günü kaçırılırsa açılışta söyler, gecikti bir kez', async () => {
+test('hatırlatma: ödenince durur, geciken ödeyene kadar her sabah yazar', async () => {
   const { bildirimPlani } = await import('../bildirim.js');
   const ayar = { gunOnce: 3, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' };
   const veri = ornekVeri();
   const kayit = veri.donemler['2026-11-15'];
-  const gecikmis = bildirimPlani(veri, ornekDonem, kayit, '2026-11-19', ayar).filter((k) => k.anahtar.includes('2026-11'));
-  assert.equal(gecikmis[0].metin, 'Yarın son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
-  const geciken = bildirimPlani(veri, ornekDonem, kayit, '2026-11-25', ayar).filter((k) => k.anahtar.includes('2026-11'));
-  assert.deepEqual(geciken.map((k) => k.anahtar), ['f:f1:2026-11:gun']);
+  const yaklasan = bildirimPlani(veri, ornekDonem, kayit, '2026-11-16', ayar).find((k) => k.anahtar === 'ozet:2026-11-17');
+  assert.equal(yaklasan.metin, '3 gün kaldı: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
+  const geciken = bildirimPlani(veri, ornekDonem, kayit, '2026-11-25', ayar);
+  assert.deepEqual(geciken.slice(0, 2).map((k) => k.anahtar), ['ozet:2026-11-25', 'ozet:2026-11-26']);
   assert.match(geciken[0].metin, /^Gecikti/);
 
   const odenmis = ornekVeri();
   odenmis.donemler['2026-11-15'].hareketler = [{ tur: 'fatura', faturaId: 'f1', ay: '2026-11', ad: 'Elektrik', kurus: 85000, tarih: '2026-11-18' }];
-  assert.deepEqual(bildirimPlani(odenmis, ornekDonem, odenmis.donemler['2026-11-15'], '2026-11-19', ayar).filter((k) => k.anahtar.includes('2026-11')), []);
+  assert.deepEqual(bildirimPlani(odenmis, ornekDonem, odenmis.donemler['2026-11-15'], '2026-11-19', ayar).filter((k) => k.anahtar.startsWith('ozet:2026-11')), []);
+});
+
+test('hatırlatma: aynı günün ödemeleri tek bildirimde toplanır, çanı kapalı olan girmez', async () => {
+  const { bildirimPlani } = await import('../bildirim.js');
+  const ayar = { gunOnce: 3, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' };
+  const veri = ornekVeri({
+    faturalar: [
+      { id: 'f1', ad: 'Kira', tur: 'sabit', gun: 20, ilkAy: '2026-11', kurus: 500000 },
+      { id: 'f2', ad: 'Su', tur: 'sabit', gun: 20, ilkAy: '2026-11', kurus: 30000 },
+      { id: 'f3', ad: 'Doğal gaz', tur: 'degisken', gun: 18, ilkAy: '2026-11' },
+      { id: 'f4', ad: 'Telefon', tur: 'sabit', gun: 23, ilkAy: '2026-11', kurus: 60000 },
+    ],
+    taksitler: [{ id: 't1', ad: 'Tablet', tur: 'sabit', toplam: 2000000, sayi: 4, gun: 20, ilkAy: '2026-11', bildirimKapali: true }],
+  });
+  const plan = bildirimPlani(veri, ornekDonem, veri.donemler['2026-11-15'], '2026-11-16', ayar);
+  const ozet = plan.find((k) => k.anahtar === 'ozet:2026-11-20');
+  assert.equal(ozet.baslik, 'Bugünkü ödemeler');
+  assert.equal(ozet.metin, 'Gecikti: Doğal gaz. Bugün: Kira 5.000,00 TL, Su 300,00 TL. 3 gün kaldı: Telefon 600,00 TL. Toplam: 5.900,00 TL.');
+  assert.equal(plan.filter((k) => k.anahtar === 'ozet:2026-11-20').length, 1);
 });
 
 test('hatırlatma: tutarı belli olmayan fatura, maaş, gün sonu, para sınırı', async () => {
@@ -618,7 +637,7 @@ test('hatırlatma: tutarı belli olmayan fatura, maaş, gün sonu, para sınır�
   const kayit = veri.donemler['2026-11-15'];
   const plan = bildirimPlani(veri, ornekDonem, kayit, '2026-11-15', ayar);
   const bul = (bas) => plan.find((k) => k.anahtar.startsWith(bas));
-  assert.equal(bul('f:f1').metin, 'Bugün son gün. Tutarı henüz belli değil.');
+  assert.equal(plan.find((k) => k.anahtar === 'ozet:2026-11-20').metin, 'Bugün son gün. Tutarı henüz belli değil.');
   assert.ok(bul('maas:2026-11-15'));
   assert.ok(bul('maas:2026-12-15'));
   assert.equal(plan.filter((k) => k.anahtar.startsWith('gunsonu')).length, 3);

@@ -63,7 +63,8 @@ function taksitlerGecerli(taksitler) {
         AY.test(t.ilkAy) &&
         (t.sayi === undefined || (Number.isInteger(t.sayi) && t.sayi >= 1 && t.sayi <= 120)) &&
         (t.tur === 'degisken' || t.sayi !== undefined) &&
-        (t.onceki === undefined || (Number.isSafeInteger(t.onceki) && t.onceki > 0 && t.onceki < t.toplam)),
+        (t.onceki === undefined || (Number.isSafeInteger(t.onceki) && t.onceki > 0 && t.onceki < t.toplam)) &&
+        (t.bildirimKapali === undefined || typeof t.bildirimKapali === 'boolean'),
     )
   );
 }
@@ -176,7 +177,8 @@ function faturalarGecerli(faturalar) {
         (f.yenileme === undefined || (Number.isInteger(f.yenileme) && f.yenileme >= 1 && f.yenileme <= 12)) &&
         (f.oran === undefined || (Number.isInteger(f.oran) && f.oran > 0 && f.oran <= 100000)) &&
         (f.kesim === undefined || (Number.isInteger(f.kesim) && f.kesim >= 1 && f.kesim <= 31)) &&
-        (f.atlanan === undefined || (Array.isArray(f.atlanan) && f.atlanan.every((a) => AY.test(a)))),
+        (f.atlanan === undefined || (Array.isArray(f.atlanan) && f.atlanan.every((a) => AY.test(a)))) &&
+        (f.bildirimKapali === undefined || typeof f.bildirimKapali === 'boolean'),
     )
   );
 }

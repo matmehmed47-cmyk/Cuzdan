@@ -34,26 +34,31 @@ function odemeMetni(kalem, kalanGun, para) {
   return `${bas}: ${tutar}. Ödenince kalan: ${paraYaz(para - kalem.kurus)}.`;
 }
 
-function odemeHatirlatmalari(kalem, bugun, ayar, para) {
-  const kimlik = `${kalem.taksitId ? `t:${kalem.taksitId}` : `f:${kalem.faturaId}`}:${kalem.ay}`;
-  const liste = [];
-  const once = gunEkle(kalem.vade, -ayar.gunOnce);
-  if (ayar.gunOnce > 0 && kalem.vade > bugun) {
-    const gorunen = once > bugun ? once : bugun;
-    liste.push({
-      anahtar: `${kimlik}:once`,
-      zaman: zaman(once, ayar.saat),
-      baslik: kalem.ad,
-      metin: odemeMetni(kalem, gunFarki(gorunen, kalem.vade), para),
-    });
+function kalemYazisi(kalem) {
+  return kalem.kurus === null ? kalem.ad : `${kalem.ad} ${paraYaz(kalem.kurus)}`;
+}
+
+// O güne düşen her ödeme tek bildirimde toplanır; geciken, ödenene kadar her sabah yazar.
+function gunlukOzet(kalemler, tarih, ayar, para) {
+  const yaklasan = ayar.gunOnce > 0 ? gunEkle(tarih, ayar.gunOnce) : null;
+  const gecikti = kalemler.filter((k) => k.vade < tarih);
+  const bugunku = kalemler.filter((k) => k.vade === tarih);
+  const sonraki = kalemler.filter((k) => k.vade === yaklasan);
+  const hepsi = [...gecikti, ...bugunku, ...sonraki];
+  if (!hepsi.length) return null;
+
+  const ortak = { anahtar: `ozet:${tarih}`, zaman: zaman(tarih, ayar.saat) };
+  if (hepsi.length === 1) {
+    return { ...ortak, baslik: hepsi[0].ad, metin: odemeMetni(hepsi[0], gunFarki(tarih, hepsi[0].vade), para) };
   }
-  liste.push({
-    anahtar: `${kimlik}:gun`,
-    zaman: zaman(kalem.vade, ayar.saat),
-    baslik: kalem.ad,
-    metin: odemeMetni(kalem, gunFarki(bugun > kalem.vade ? bugun : kalem.vade, kalem.vade), para),
-  });
-  return liste;
+  const satirlar = [['Gecikti', gecikti], ['Bugün', bugunku], [`${ayar.gunOnce} gün kaldı`, sonraki]]
+    .filter(([, liste]) => liste.length)
+    .map(([ad, liste]) => `${ad}: ${liste.map(kalemYazisi).join(', ')}.`);
+  return {
+    ...ortak,
+    baslik: gecikti.length || bugunku.length ? 'Bugünkü ödemeler' : 'Yaklaşan ödemeler',
+    metin: `${satirlar.join(' ')} Toplam: ${paraYaz(ayrilanTutar(hepsi))}.`,
+  };
 }
 
 function bugunHarcamaVar(kayit, bugun) {
@@ -86,9 +91,15 @@ function kiraUyarilari(veri, bugun, ayar) {
 // Ödenen kalem listeye girmez; bu yüzden tik atılınca bildirimi de durur.
 export function bildirimPlani(veri, donem, kayit, bugun, ayar = bildirimAyari(veri)) {
   const sinir = { baslangic: donem.baslangic, bitis: gunEkle(bugun, ILERI_GUN) };
-  const kalemler = [...donemKalemleri(veri, sinir, bugun), ...donemTaksitleri(veri, sinir, bugun)].filter(bekliyorMu);
+  const kapali = new Set([...(veri.faturalar ?? []), ...(veri.taksitler ?? [])].filter((k) => k.bildirimKapali).map((k) => k.id));
+  const kalemler = [...donemKalemleri(veri, sinir, bugun), ...donemTaksitleri(veri, sinir, bugun)]
+    .filter((k) => bekliyorMu(k) && !kapali.has(k.faturaId ?? k.taksitId));
   const para = kalanPara(kayit);
-  const plan = kalemler.flatMap((k) => odemeHatirlatmalari(k, bugun, ayar, para));
+  const plan = [];
+  for (let i = 0; i <= ILERI_GUN; i += 1) {
+    const ozet = gunlukOzet(kalemler, gunEkle(bugun, i), ayar, para);
+    if (ozet) plan.push(ozet);
+  }
 
   if (ayar.maas) {
     for (const tarih of [donem.baslangic, donem.sonraki]) {

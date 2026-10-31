@@ -144,6 +144,8 @@ const IKONLAR = {
   gecmis: '<path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4.500v4h4"/><path d="M12 8v4.500l3 1.8"/>',
   ayar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.900l.1.100a2 2 0 1 1-2.8 2.800l-.1-.1a1.7 1.7 0 0 0-2.9 1.200V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.200l-.1.1a2 2 0 1 1-2.8-2.800l.1-.1a1.7 1.7 0 0 0-1.2-2.900H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.900l-.1-.1a2 2 0 1 1 2.8-2.800l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.500V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.200l.1-.1a2 2 0 1 1 2.8 2.800l-.1.1a1.7 1.7 0 0 0 1.2 2.900h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   geri: '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
+  zil: '<path d="M6 10a6 6 0 1 1 12 0c0 5 2 6.500 2 6.500H4s2-1.500 2-6.500z"/><path d="M10 20a2.200 2.200 0 0 0 4 0"/>',
+  zilKapali: '<path d="M6 10a6 6 0 1 1 12 0c0 5 2 6.500 2 6.500H4s2-1.500 2-6.500z"/><path d="M10 20a2.200 2.200 0 0 0 4 0"/><path d="m4 3.500 16 17"/>',
   kalem: '<path d="M4 20l1-4.500L16.5 4l3.5 3.500L8.5 19z"/>',
   yenile: '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.500h-4.5"/>',
   dolar: '<circle cx="12" cy="12" r="8.5"/><path d="M15 9c-.5-1.2-1.7-1.8-3-1.8-1.7 0-3 .9-3 2.3 0 3.2 6 1.7 6 4.9 0 1.4-1.3 2.3-3 2.3-1.3 0-2.5-.6-3-1.8"/><path d="M12 5.500v13"/>',
@@ -588,6 +590,32 @@ function durumYazisi(kalem, bugun) {
   return kalan === 0 ? 'Bugün' : `${kalan} gün kaldı · ${tarihYaz(kalem.vade)}`;
 }
 
+// Çan kaydı hatırlatmaya alır; telefon bildirimi kapalıysa izni ilk basışta ister.
+function zilDugmesi(kayit, guncelle, geri) {
+  const acik = Boolean(veri.bildirim?.telefon) && !kayit.bildirimKapali;
+  return el('button', {
+    type: 'button',
+    sinif: acik ? 'zil acik' : 'zil',
+    'aria-pressed': String(acik),
+    'aria-label': `${kayit.ad} hatırlatması`,
+    onclick: async () => {
+      if (!acik && !veri.bildirim?.telefon && !(await telefonIzni())) {
+        uyari = 'Bildirim izni alınamadı. Telefonun ayarlarından Cüzdan için bildirimi aç.';
+        return geri();
+      }
+      kaydetVeUyar(guncelle(veri, kayit.id, { bildirimKapali: acik ? true : undefined }));
+      geri();
+    },
+  }, ikon(acik ? 'zil' : 'zilKapali'));
+}
+
+function zilIpucu() {
+  const metin = veri.bildirim?.telefon && !oturum()
+    ? 'Uygulama kapalıyken saatinde gelmesi için Ayarlar\'dan hesap aç.'
+    : 'Çan açıksa günü gelince telefonuna bildirim gelir.';
+  return el('p', { sinif: 'ipucu bosluk' }, metin);
+}
+
 function kalemKutusu(odeme, donem, bugun, geri, tamListe = false) {
   const dugmeler = [];
   if (bekliyorMu(odeme)) {
@@ -693,9 +721,11 @@ function faturalarEkrani() {
                 [
                   siradaki ? el('button', { type: 'button', sinif: 'kucuk', onclick: () => odemeBaslat(siradaki, donem, bugun, faturalarEkrani) }, '✓ Ödedim') : null,
                   el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => faturaFormu(f) }, 'Düzenle'),
+                  zilDugmesi(f, faturaGuncelle, faturalarEkrani),
                 ],
               );
             }),
+            zilIpucu(),
           )
         : null,
     ),
@@ -878,7 +908,12 @@ function taksitKarti(taksit, donem, bugun) {
       'div',
       { sinif: 'bolum-baslik' },
       el('h2', {}, taksit.ad),
-      taksit.sayi ? el('span', { sinif: 'rozet' }, `${Math.min(durum.odenenAdet, taksit.sayi)}/${taksit.sayi}`) : null,
+      el(
+        'div',
+        { sinif: 'baslik-sag' },
+        taksit.sayi ? el('span', { sinif: 'rozet' }, `${Math.min(durum.odenenAdet, taksit.sayi)}/${taksit.sayi}`) : null,
+        durum.kalan > 0 ? zilDugmesi(taksit, taksitGuncelle, taksitlerEkrani) : null,
+      ),
     ),
     degerler(['Ödenen', paraYaz(durum.odenen)], ['Kalan', paraYaz(durum.kalan)]),
     kategoriCubugu(durum.odenen, taksit.toplam),
@@ -894,7 +929,7 @@ function taksitKarti(taksit, donem, bugun) {
       siradaki
         ? el('button', { type: 'button', sinif: 'kucuk', onclick: () => taksitOdeFormu(siradaki, donem, taksitlerEkrani) }, '✓ Ödedim')
         : null,
-      el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => taksitDetayi(taksit.id) }, 'Ödeme geçmişi ve düzenle'),
+      el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => taksitDetayi(taksit.id) }, 'Geçmiş ve düzenle'),
     ),
   );
 }
@@ -2853,6 +2888,15 @@ async function telefonAbonesi() {
   return true;
 }
 
+async function telefonIzni() {
+  if (!('Notification' in window && 'serviceWorker' in navigator)) return false;
+  if ((await window.Notification.requestPermission()) !== 'granted') return false;
+  kaydetVeUyar({ ...veri, bildirim: { ...bildirimAyari(veri), telefon: true } });
+  await arkaPlanKaydi();
+  await telefonAbonesi().catch(() => {});
+  return true;
+}
+
 function hatirlatmaEkrani() {
   const ayar = bildirimAyari(veri);
   const destek = 'Notification' in window && 'serviceWorker' in navigator;
@@ -2879,13 +2923,10 @@ function hatirlatmaEkrani() {
   }
 
   async function telefonuAc() {
-    if ((await window.Notification.requestPermission()) !== 'granted') {
+    if (!(await telefonIzni())) {
       durum.textContent = 'İzin verilmedi. Hatırlatmalar uygulamayı açınca görünmeye devam eder.';
       return;
     }
-    kaydetVeUyar({ ...veri, bildirim: { ...ayar, telefon: true } });
-    await arkaPlanKaydi();
-    await telefonAbonesi().catch(() => {});
     hatirlatmaEkrani();
   }
 
@@ -2918,7 +2959,7 @@ function hatirlatmaEkrani() {
       },
     },
     ikiAlan([el('label', { htmlFor: 'gun-once' }, 'Ne zaman söylesin?'), gunOnce], [el('label', { htmlFor: 'saat' }, 'Saat'), saat]),
-    el('p', { sinif: 'ipucu' }, 'Her ödeme için bir kez önceden, bir kez son gün söylenir. Ödenince durur.'),
+    el('p', { sinif: 'ipucu' }, 'Ödeme olan sabah tek bildirimde toplanır. Geciken ödeme, ödeyene kadar her sabah yazar.'),
     el('label', { sinif: 'secim', htmlFor: 'maas' }, maas, el('span', {}, 'Maaş gününde söyle')),
     el('label', { sinif: 'secim', htmlFor: 'gun-sonu' }, gunSonu, el('span', {}, 'Gün sonunda harcamaları sor')),
     ikiAlan([el('label', { htmlFor: 'gun-sonu-saat' }, 'Gün sonu saati'), gunSonuSaat]),

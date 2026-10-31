@@ -84,6 +84,33 @@ test('taksit: sıradaki ödeme bu dönemde olmasa da erken ödenir', async () =>
   assert.match(metin(window), /1\/4/);
 });
 
+test('çan: basınca fatura hatırlatmadan çıkar, yeniden basınca döner', async () => {
+  const ayar = ilkAyar(15);
+  const { baslangic } = donemBul(ayar, bugunTR());
+  const window = await uygulamaAc(JSON.stringify({
+    surum: 1,
+    ad: 'Ev',
+    ayar,
+    bildirim: { gunOnce: 3, saat: '09:00', maas: true, gunSonu: false, gunSonuSaat: '21:00', telefon: true },
+    faturalar: [{ id: 'a', ad: 'Su', tur: 'sabit', gun: 10, kurus: 30000, ilkAy: '2026-12' }],
+    donemler: { [baslangic]: { para: 100000, hareketler: [] } },
+  }));
+  const { document } = window;
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1')).faturalar[0];
+  const zil = () => document.querySelector('.zil');
+
+  [...document.querySelectorAll('button')].find((d) => d.textContent === 'Ödemeler').click();
+  assert.equal(zil().getAttribute('aria-pressed'), 'true');
+  zil().click();
+  await new Promise((bitti) => { setTimeout(bitti, 0); });
+  assert.equal(kayit().bildirimKapali, true);
+  assert.equal(zil().getAttribute('aria-pressed'), 'false');
+  zil().click();
+  await new Promise((bitti) => { setTimeout(bitti, 0); });
+  assert.equal(kayit().bildirimKapali, undefined);
+  assert.equal(zil().getAttribute('aria-pressed'), 'true');
+});
+
 test('ilk kurulum: ad, maaş günü ve para ile ana ekrana gelir', async () => {
   const window = await uygulamaAc();
   const { document } = window;
@@ -525,7 +552,7 @@ test('taksit eklenir, ayrılır, ödenir, geri alınır, biter', async () => {
   assert.match(metin(window), /Kalan6\.000,00 TL/);
   assert.equal(kayit().donemler[baslangic].hareketler[0].tur, 'taksit');
 
-  dugme('Ödeme geçmişi ve düzenle').click();
+  dugme('Geçmiş ve düzenle').click();
   dugme('Geri al').click();
   assert.equal(kayit().donemler[baslangic].hareketler.length, 0);
   assert.match(metin(window), /Henüz ödeme yok/);
