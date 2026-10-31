@@ -16,14 +16,17 @@ import {
 } from '../fatura.js';
 import {
   VARSAYILAN_KATEGORILER,
+  geriAldimEkle,
   harcamaEkle,
   harcamaGuncelle,
   harcamaListesi,
-  harcamaSil,
+  hareketSil,
   kategoriAdDegistir,
   kategoriEkle,
   kategoriSil,
   kategoriToplamlari,
+  ortakListesi,
+  ortakOzet,
   siraliKategoriler,
 } from '../harcama.js';
 
@@ -251,7 +254,7 @@ test('harcama: ekleme, düzeltme ve silme parayı doğru değiştirir', () => {
   assert.equal(veri.donemler[BAS].hareketler[0].tur, 'harcama');
   assert.equal(veri.donemler[BAS].hareketler[0].kategori, 'Ev');
 
-  veri = harcamaSil(veri, BAS, 0);
+  veri = hareketSil(veri, BAS, 0);
   assert.equal(kalanPara(veri.donemler[BAS]), 95000);
   assert.equal(veriGecerliMi(JSON.parse(JSON.stringify(veri))), true);
 });
@@ -292,6 +295,30 @@ test('kategori: ad değişince eski kayıtlar da değişir, silince kayıt kalı
   const silindi = kategoriSil(veri, 'Market');
   assert.equal(silindi.kategoriler.includes('Market'), false);
   assert.equal(silindi.donemler[BAS].hareketler[0].kategori, 'Market');
+});
+
+test('ortak ev: tutar ana paradan düşer, kişi başı ve geri alınan doğru hesaplanır', () => {
+  let veri = harcamaEkle(harcamaVerisi(), BAS, { kurus: 12000, not: 'Çamaşır suyu', ortak: true, tarih: BAS });
+  veri = harcamaEkle(veri, BAS, { kurus: 30000, not: 'Deterjan', ortak: true, tarih: '2026-10-20' });
+  veri = harcamaEkle(veri, BAS, { kurus: 5000, not: 'Elma', tarih: BAS });
+  const kayit = veri.donemler[BAS];
+
+  assert.equal(kalanPara(kayit), 53000);
+  assert.deepEqual(ortakListesi(kayit).map((h) => h.not), ['Deterjan', 'Çamaşır suyu']);
+  assert.deepEqual(ortakOzet(kayit, 3), { harcanan: 42000, geriAlinan: 0, kalan: 42000, kisiBasi: 14000 });
+  assert.equal(ortakOzet(kayit, undefined).kisiBasi, null);
+
+  const geri = geriAldimEkle(veri, BAS, { kurus: 14000, tarih: '2026-10-25' });
+  assert.equal(kalanPara(geri.donemler[BAS]), 67000);
+  assert.equal(ortakOzet(geri.donemler[BAS]).kalan, 28000);
+  assert.equal(veriGecerliMi(JSON.parse(JSON.stringify(geri))), true);
+});
+
+test('ortak ev: yedek doğrulaması bozuk kişi sayısını reddeder', () => {
+  const veri = harcamaVerisi();
+  assert.equal(veriGecerliMi({ ...veri, ortakKisi: 3 }), true);
+  assert.equal(veriGecerliMi({ ...veri, ortakKisi: 1 }), false);
+  assert.equal(veriGecerliMi({ ...veri, ortakKisi: '3' }), false);
 });
 
 test('harcama: yedek doğrulaması uzun not ve bozuk kategoriyi reddeder', () => {

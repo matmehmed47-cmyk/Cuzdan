@@ -1,6 +1,6 @@
 // Harcama kaydı dönemin hareketler listesinde durur; düzeltme ve silme için listedeki sırası kullanılır.
 
-export const VARSAYILAN_KATEGORILER = ['Market', 'Yemek', 'Ulaşım', 'Ev', 'Sağlık', 'Giyim', 'Eğlence'];
+export const VARSAYILAN_KATEGORILER = ['Meyve sebze', 'Market', 'Yemek', 'Ulaşım', 'Ev', 'Sağlık', 'Giyim', 'Eğlence'];
 export const DIGER = 'Diğer';
 export const KAYITSIZ = 'Kayıtsız';
 
@@ -62,7 +62,7 @@ export function harcamaGuncelle(veri, baslangic, sira, bilgi) {
   return hareketleriYaz(veri, baslangic, hareketler);
 }
 
-export function harcamaSil(veri, baslangic, sira) {
+export function hareketSil(veri, baslangic, sira) {
   return hareketleriYaz(veri, baslangic, veri.donemler[baslangic].hareketler.filter((_, i) => i !== sira));
 }
 
@@ -80,4 +80,27 @@ export function kategoriToplamlari(kayit) {
     toplamlar.set(ad, (toplamlar.get(ad) ?? 0) + h.kurus);
   }
   return [...toplamlar].map(([ad, kurus]) => ({ ad, kurus })).sort((a, b) => b.kurus - a.kurus);
+}
+
+export function ortakListesi(kayit) {
+  return harcamaListesi(kayit).filter((h) => h.ortak);
+}
+
+export function geriAlinanlar(kayit) {
+  return (kayit.hareketler ?? [])
+    .map((h, sira) => ({ ...h, sira }))
+    .filter((h) => h.tur === 'gelir' && h.ortak)
+    .sort((a, b) => b.tarih.localeCompare(a.tarih) || b.sira - a.sira);
+}
+
+// Arkadaşın payını verince tutar gelir olarak paraya eklenir, Ortak ekranında ayrı görünür.
+export function geriAldimEkle(veri, baslangic, bilgi) {
+  return hareketleriYaz(veri, baslangic, [...(veri.donemler[baslangic].hareketler ?? []), { tur: 'gelir', ortak: true, ...bilgi }]);
+}
+
+export function ortakOzet(kayit, kisi) {
+  const toplamAl = (liste) => liste.reduce((t, h) => t + h.kurus, 0);
+  const harcanan = toplamAl(ortakListesi(kayit));
+  const geriAlinan = toplamAl(geriAlinanlar(kayit));
+  return { harcanan, geriAlinan, kalan: harcanan - geriAlinan, kisiBasi: kisi ? Math.round(harcanan / kisi) : null };
 }

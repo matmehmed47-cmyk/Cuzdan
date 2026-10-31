@@ -298,14 +298,79 @@ test('kategoriler ekranı: ekle, ad değiştir, sil', async () => {
   gonder(window, document.querySelector('form'));
   assert.equal(kayit().kategoriler.at(-1), 'Kırtasiye');
 
-  dugme('Ad değiştir').click();
+  const satirDugmesi = (ad, yazi) => [...document.querySelectorAll('.kalem')]
+    .find((k) => k.querySelector('strong').textContent === ad)
+    .querySelector(`button.${yazi}`);
+  satirDugmesi('Market', 'ikincil').click();
   document.getElementById('ad').value = 'Bakkal';
   gonder(window, document.querySelector('form'));
   assert.equal(kayit().donemler[baslangic].hareketler[0].kategori, 'Bakkal');
 
-  dugme('Sil').click();
+  satirDugmesi('Bakkal', 'tehlike').click();
   assert.equal(kayit().kategoriler.includes('Bakkal'), false);
   assert.equal(kayit().donemler[baslangic].hareketler[0].kategori, 'Bakkal');
+});
+
+test('ortak ev: buradan yazılır, ana paradan düşer, geri alınır, Geçmiş\'te kalır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const eski = { tur: 'harcama', kurus: 2000, tarih: '2000-01-20', not: 'Eski sabun', ortak: true };
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { '2000-01-15': { para: 5000, hareketler: [eski] }, [baslangic]: { para: 100000, hareketler: [] } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+
+  dugme('Ortak ev').click();
+  assert.match(metin(window), /Henüz ortak harcama yok/);
+  assert.doesNotMatch(metin(window), /null|undefined/);
+  assert.doesNotMatch(metin(window), /Eski sabun/);
+
+  dugme('+ Ortak harcama').click();
+  assert.equal(document.getElementById('ortak').checked, true);
+  assert.equal(dugme('Ev').getAttribute('aria-pressed'), 'true');
+  assert.equal(document.getElementById('not').placeholder, 'Örnek: Çamaşır suyu');
+  document.getElementById('tutar').value = '300';
+  document.getElementById('not').value = 'Çamaşır suyu';
+  gonder(window, document.querySelector('form'));
+  assert.equal(document.getElementById('ortak-toplam').textContent, '300,00 TL');
+  assert.match(metin(window), /Çamaşır suyu300,00 TL/);
+
+  const secici = document.getElementById('ortak-kisi');
+  secici.value = '3';
+  secici.dispatchEvent(new window.Event('change'));
+  assert.equal(kayit().ortakKisi, 3);
+  assert.match(metin(window), /Kişi başı \(3 kişi\)100,00 TL/);
+
+  dugme('Geri aldım').click();
+  document.getElementById('tutar').value = '100';
+  document.getElementById('not').value = 'Ali';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Sende kalan masraf200,00 TL/);
+  assert.match(metin(window), /Ali100,00 TL/);
+
+  dugme('Düzenle').click();
+  assert.equal(document.getElementById('ortak').checked, true);
+  document.getElementById('ortak').checked = false;
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Henüz ortak harcama yok/);
+  dugme('Sil').click();
+  assert.equal(kayit().donemler[baslangic].hareketler.length, 1);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.equal(document.getElementById('ana-para').textContent, '700,00 TL');
+
+  dugme('+ Harcama').click();
+  document.getElementById('tutar').value = '50';
+  document.getElementById('ortak').checked = true;
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().donemler[baslangic].hareketler[1].ortak, true);
+
+  dugme('Geçmiş dönemler').click();
+  dugme('Ortak ev listesini gör').click();
+  assert.match(metin(window), /Eski sabun/);
+  assert.equal(dugme('+ Ortak harcama'), undefined);
+  assert.equal(dugme('Düzenle'), undefined);
+  assert.equal(document.getElementById('ortak-kisi'), null);
 });
 
 test('para eksiye düşerse açıkça yazar', async () => {
