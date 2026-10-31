@@ -1123,3 +1123,18 @@ test('telefonun geri tuşu ekranlar arasında geri götürür', async () => {
   assert.equal(document.querySelector('.hesap-perde'), null);
   assert.ok(document.getElementById('tutar'));
 });
+
+test('açılış ekranı logo, imza ve adı gösterir, dokununca kapanır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100 } } }));
+  const { document } = window;
+  const perde = document.getElementById('acilis');
+  assert.ok(perde.querySelector('.a-para'));
+  assert.ok(perde.querySelector('.a-cep'));
+  assert.ok(perde.querySelectorAll('.imza path').length > 5);
+  assert.match(perde.textContent, /Mehmetnur Özkoç/);
+  assert.ok(document.getElementById('ana-para'));
+  perde.click();
+  assert.ok(perde.classList.contains('bitti'));
+});

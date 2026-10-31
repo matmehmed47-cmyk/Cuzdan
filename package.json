@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test \"test/*.test.js\"",
-    "ikon": "node araclar/ikon-uret.mjs"
+    "test": "node --test \"test/*.test.js\""
   },
   "devDependencies": {
     "jsdom": "^26.1.0"

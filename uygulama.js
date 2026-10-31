@@ -108,6 +108,7 @@ import {
 import { kenardaPara, planAyir, planDurumu, planEkle, planKapat } from './plan.js';
 import { defterDurumu, defterEkle, defterOde, defterOdemeSil, defterOzet, defterSil } from './defter.js';
 import { GRUPLAR, girenMi, gunlereAyir, hareketListesi, hareketToplamlari } from './hareket.js';
+import { acilisGoster } from './acilis.js';
 import { IMZA } from './imza.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
 import { konusmaCoz } from './ses.js';
@@ -317,7 +318,7 @@ function kurulumEkrani() {
   const baslik = el(
     'div',
     { sinif: 'karsilama' },
-    ikon('cuzdan'),
+    el('img', { src: 'ikon/logo.svg', alt: '' }),
     el('h1', {}, 'Cüzdan'),
     el('p', { sinif: 'adim' }, `Adım ${adim} / 3`),
     el('div', { sinif: 'noktalar' }, [1, 2, 3].map((n) => el('span', { sinif: n <= adim ? 'dolu' : '' }))),
@@ -3389,4 +3390,5 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
+acilisGoster();
 baslat();

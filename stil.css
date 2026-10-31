@@ -1521,3 +1521,109 @@ button.imza-kart {
   font-size: 1.15rem;
   font-weight: 700;
 }
+
+.karsilama img {
+  display: block;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 12px;
+  border-radius: 22px;
+}
+
+/* Açılış */
+
+.acilis {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(160deg, #0a4238 0%, #0f6b5c 70%, #17806e 100%);
+  color: #ffffff;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.acilis.bitti {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.a-logo {
+  display: block;
+  width: min(58vw, 230px);
+  overflow: visible;
+}
+
+.a-cep {
+  animation: a-yuksel 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s both;
+}
+
+.a-dikis {
+  opacity: 0;
+  animation: a-dikis 0.3s ease 0.55s forwards;
+}
+
+.a-para {
+  animation: a-cik 0.6s cubic-bezier(0.2, 1.1, 0.3, 1) 0.8s both;
+}
+
+.a-toplam {
+  stroke-dasharray: 1 2;
+  stroke-dashoffset: 1.02;
+  animation: imza-ciz 0.35s ease-out 1.25s forwards;
+}
+
+.acilis .imza {
+  width: min(44vw, 170px);
+  color: #ffffff;
+}
+
+.a-ad {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  animation: a-dikis 0.35s ease 2.25s forwards;
+}
+
+@keyframes a-yuksel {
+  from {
+    opacity: 0;
+    transform: translateY(130px);
+  }
+}
+
+@keyframes a-cik {
+  from {
+    transform: translateY(190px);
+  }
+}
+
+@keyframes a-dikis {
+  to {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-cep,
+  .a-para {
+    animation: none;
+  }
+
+  .a-dikis,
+  .a-ad {
+    opacity: 0.8;
+    animation: none;
+  }
+
+  .a-toplam {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+}
