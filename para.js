@@ -33,7 +33,7 @@ export function paraYaz(kurus) {
 
 export function kalanPara(donem) {
   return (donem.hareketler ?? []).reduce(
-    (toplam, h) => toplam + (h.tur === 'gelir' || h.tur === 'satis' ? h.kurus : -h.kurus),
+    (toplam, h) => toplam + (['gelir', 'satis', 'tahsil'].includes(h.tur) ? h.kurus : -h.kurus),
     donem.para,
   );
 }

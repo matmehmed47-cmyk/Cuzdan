@@ -718,3 +718,66 @@ test('internetsiz çalışma: her uygulama dosyası önbellek listesinde', async
     assert.ok(sw.includes(`'./${ad}'`), ad);
   }
 });
+
+test('alacak-verecek: kalan, kısmi ödeme, para hareketi ve silme', async () => {
+  const { defterDurumu, defterEkle, defterOde, defterOdemeSil, defterOzet, defterSil } = await import('../defter.js');
+  const bas = '2026-11-15';
+  let veri = { donemler: { [bas]: { para: 100000 } } };
+  veri = defterEkle(veri, { id: 'a', kisi: 'Ali', yon: 'alacak', kurus: 30000, tarih: '2026-11-16' }, bas);
+  assert.equal(kalanPara(veri.donemler[bas]), 70000);
+  veri = defterEkle(veri, { id: 'b', kisi: 'Abim', yon: 'borc', kurus: 50000, tarih: '2026-11-16' }, bas);
+  assert.equal(kalanPara(veri.donemler[bas]), 120000);
+  veri = defterEkle(veri, { id: 'c', kisi: 'Eski', yon: 'borc', kurus: 1000, tarih: '2026-11-16' });
+  assert.equal(kalanPara(veri.donemler[bas]), 120000);
+  assert.deepEqual(defterOzet(veri), { borc: 51000, alacak: 30000 });
+
+  assert.equal(defterOde(veri, 'a', { id: 'o', kurus: 99999, tarih: '2026-11-17' }, bas), null);
+  veri = defterOde(veri, 'a', { id: 'o1', kurus: 10000, tarih: '2026-11-17' }, bas);
+  assert.equal(kalanPara(veri.donemler[bas]), 130000);
+  veri = defterOde(veri, 'b', { id: 'o2', kurus: 20000, tarih: '2026-11-17' }, bas);
+  assert.equal(kalanPara(veri.donemler[bas]), 110000);
+  assert.equal(defterDurumu(veri.defter[1]).kalan, 30000);
+
+  veri = defterOdemeSil(veri, 'b', 'o2');
+  assert.equal(kalanPara(veri.donemler[bas]), 130000);
+  veri = defterSil(veri, 'a');
+  assert.equal(kalanPara(veri.donemler[bas]), 150000);
+  assert.equal(veri.defter.length, 2);
+});
+
+test('masraf planı: aylık tutar, serbest paradan ayrılma', async () => {
+  const { kenardaPara, planAyir, planDurumu, planEkle, planKapat } = await import('../plan.js');
+  let veri = planEkle({ kose: 1000 }, { id: 'p', ad: 'Okul', hedef: 3000000, ay: '2027-04' });
+  assert.deepEqual(planDurumu(veri.planlar[0], '2026-11-20'), { kalan: 3000000, kalanAy: 6, aylik: 500000 });
+  veri = planAyir(veri, 'p', 500000);
+  assert.equal(kenardaPara(veri), 501000);
+  assert.deepEqual(planDurumu(veri.planlar[0], '2026-11-20'), { kalan: 2500000, kalanAy: 6, aylik: 416667 });
+  assert.equal(planDurumu(veri.planlar[0], '2027-09-01').kalanAy, 1);
+  assert.equal(kenardaPara(planKapat(veri, 'p')), 1000);
+});
+
+test('kira uyarısı bir ay önce, oranla ya da oransız', async () => {
+  const { bildirimPlani, yeniKira } = await import('../bildirim.js');
+  assert.equal(yeniKira(3000000, 3149), 3944700);
+  const ayar = { gunOnce: 0, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' };
+  const fatura = { id: 'k', ad: 'Kira', tur: 'sabit', gun: 5, ilkAy: '2026-11', kurus: 3000000, cesit: 'kira', yenileme: 12, oran: 3149 };
+  const veri = ornekVeri({ faturalar: [fatura] });
+  const kayit = veri.donemler['2026-11-15'];
+  const bul = (v, g) => bildirimPlani(v, ornekDonem, kayit, g, ayar).find((k) => k.anahtar.startsWith('kira:'));
+  assert.equal(bul(veri, '2026-11-20').metin, 'Aralık ayında kira yaklaşık 39.447,00 TL olabilir.');
+  assert.equal(bul(veri, '2026-10-20'), undefined);
+  const oransiz = ornekVeri({ faturalar: [{ ...fatura, oran: undefined }] });
+  assert.match(bul(oransiz, '2026-11-20').metin, /yenileniyor/);
+  assert.equal(bul(ornekVeri({ faturalar: [{ ...fatura, yenileme: 1 }] }), '2026-12-20').anahtar, 'kira:k:2026');
+});
+
+test('yeni kayıt türleri yedekte doğrulanır', () => {
+  const temel = { surum: 1, ad: 'Ev', ayar: ilkAyar(15), donemler: {} };
+  const defter = { id: 'd', kisi: 'Ali', yon: 'borc', kurus: 100, tarih: '2026-11-01' };
+  const plan = { id: 'p', ad: 'Okul', hedef: 100, ayrilan: 0, ay: '2027-09' };
+  assert.equal(veriGecerliMi({ ...temel, defter: [defter], planlar: [plan] }), true);
+  assert.equal(veriGecerliMi({ ...temel, defter: [{ ...defter, yon: 'x' }] }), false);
+  assert.equal(veriGecerliMi({ ...temel, planlar: [{ ...plan, ay: 'eylül' }] }), false);
+  assert.equal(veriGecerliMi({ ...temel, faturalar: [{ id: 'f', ad: 'Kira', tur: 'sabit', gun: 5, ilkAy: '2026-11', kurus: 1, cesit: 'kira', yenileme: 13 }] }), false);
+  assert.equal(veriGecerliMi({ ...temel, donemler: { '2026-11-15': { para: 1, hareketler: [{ tur: 'tahsil', kurus: 5, tarih: '2026-11-16', defterId: 'd', ad: 'Ali' }] } } }), true);
+});

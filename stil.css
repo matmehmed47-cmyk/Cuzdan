@@ -1069,7 +1069,7 @@ button.varlik {
 }
 
 .hizli {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 button.hizli-dugme {
@@ -1340,5 +1340,9 @@ button.hesap-gecmis + button.hesap-gecmis {
 }
 
 .alan[hidden] {
+  display: none;
+}
+
+.alanlar[hidden] {
   display: none;
 }

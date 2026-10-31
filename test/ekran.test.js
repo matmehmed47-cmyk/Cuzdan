@@ -774,7 +774,7 @@ test('N bölümü: takvim, hedef, köşe, kredi kartı, sesli giriş, geçmiş g
   document.getElementById('tutar').value = '100';
   gonder(window, document.querySelector('form'));
   document.querySelector('[aria-label="Geri"]').click();
-  assert.match(metin(window), /Köşedeki para/);
+  assert.match(metin(window), /Kenarda duran/);
   assert.equal(document.getElementById('ana-para').textContent, '600,00 TL');
 
   dugme('+ Harcama').click();
@@ -918,4 +918,78 @@ test('hesap: başka cihazdaki yeni kayıt açılışta gelir, internet yokken ka
   assert.equal(document.getElementById('ana-para').textContent, '7.000,00 TL');
   assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.esitleme')).surum, 5);
   assert.match(metin(window), /Hesabına kaydediliyor/);
+});
+
+test('O bölümü: alacak-verecek, masraf planı, kira, sürpriz harcama', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 1000000 } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+  const ana = () => document.getElementById('ana-para').textContent;
+
+  dugme('Alacak-verecek').click();
+  dugme('+ Borcum var').click();
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Kişinin adını yaz/);
+  document.getElementById('kisi').value = 'Abim';
+  document.getElementById('tutar').value = '10.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Borcum.*10\.000,00 TL/);
+  dugme('Aç').click();
+  dugme('Ödeme yaptım').click();
+  assert.equal(document.getElementById('tutar').value, '10.000,00 TL');
+  document.getElementById('tutar').value = '20.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Daha fazlası yazılamaz/);
+  document.getElementById('tutar').value = '4.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /6\.000,00 TL/);
+  document.querySelector('[aria-label="Geri"]').click();
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.equal(ana(), '6.000,00 TL');
+
+  dugme('Masraf planı').click();
+  dugme('+ Masraf ekle').click();
+  document.getElementById('ad').value = 'Okul';
+  document.getElementById('tutar').value = '5.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /1 ay kaldı, ayda 5\.000,00 TL/);
+  dugme('Para ayır').click();
+  document.getElementById('tutar').value = '2.000';
+  gonder(window, document.querySelector('form'));
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.equal(ana(), '4.000,00 TL');
+  assert.match(metin(window), /Kenarda duran/);
+  dugme('Masraf planı').click();
+  dugme('Planı kapat').click();
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.equal(ana(), '6.000,00 TL');
+
+  dugme('+ Harcama').click();
+  document.getElementById('tutar').value = '500';
+  document.getElementById('surpriz').click();
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().donemler[baslangic].hareketler.at(-1).surpriz, true);
+  dugme('Harcamalar').click();
+  assert.match(metin(window), /Sürpriz harcamalar: 500,00 TL/);
+
+  dugme('Ödemeler').click();
+  dugme('+ Fatura ekle').click();
+  document.getElementById('ad').value = 'Kira';
+  document.getElementById('cesit').value = 'kira';
+  document.getElementById('cesit').dispatchEvent(new window.Event('change'));
+  document.getElementById('tutar').value = '30.000';
+  document.getElementById('gun').value = '5';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Yenileme ayını seç/);
+  document.getElementById('yenileme').value = '3';
+  document.getElementById('oran').value = 'yanlış';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Oranı sayı olarak yaz/);
+  document.getElementById('oran').value = '31,49';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().faturalar[0].oran, 3149);
+  assert.match(metin(window), /Yenileme: Mart · Yeni kira yaklaşık 39\.447,00 TL/);
 });

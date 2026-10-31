@@ -3,6 +3,7 @@
 import { gunEkle, gunFarki } from './donem.js';
 import { ayrilanTutar, bekliyorMu, donemKalemleri } from './fatura.js';
 import { kalanPara, paraYaz } from './para.js';
+import { kenardaPara } from './plan.js';
 import { donemTaksitleri } from './taksit.js';
 
 export const VARSAYILAN_AYAR = { gunOnce: 3, saat: '09:00', maas: true, gunSonu: false, gunSonuSaat: '21:00' };
@@ -59,6 +60,29 @@ function bugunHarcamaVar(kayit, bugun) {
   return (kayit.hareketler ?? []).some((h) => h.tur === 'harcama' && h.tarih === bugun);
 }
 
+// Kira yenilenmeden bir ay önce söylenir; artış oranı her ay değiştiği için kullanıcı yazar.
+export function yeniKira(kurus, oran) {
+  return Math.round((kurus * (10000 + oran)) / 10000);
+}
+
+function kiraUyarilari(veri, bugun, ayar) {
+  const [yil, ay] = bugun.split('-').map(Number);
+  const sonraki = ay === 12 ? 1 : ay + 1;
+  return (veri.faturalar ?? [])
+    .filter((f) => f.cesit === 'kira' && f.yenileme === sonraki)
+    .map((f) => {
+      const adi = new Intl.DateTimeFormat('tr-TR', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, sonraki - 1, 1)));
+      return {
+        anahtar: `kira:${f.id}:${yil}`,
+        zaman: zaman(`${bugun.slice(0, 7)}-01`, ayar.saat),
+        baslik: f.ad,
+        metin: f.oran && f.kurus
+          ? `${adi} ayında kira yaklaşık ${paraYaz(yeniKira(f.kurus, f.oran))} olabilir.`
+          : `${adi} ayında kira yenileniyor. Yeni tutarı faturadan güncellemeyi unutma.`,
+      };
+    });
+}
+
 // Ödenen kalem listeye girmez; bu yüzden tik atılınca bildirimi de durur.
 export function bildirimPlani(veri, donem, kayit, bugun, ayar = bildirimAyari(veri)) {
   const sinir = { baslangic: donem.baslangic, bitis: gunEkle(bugun, ILERI_GUN) };
@@ -91,8 +115,10 @@ export function bildirimPlani(veri, donem, kayit, bugun, ayar = bildirimAyari(ve
     }
   }
 
+  plan.push(...kiraUyarilari(veri, bugun, ayar));
+
   const donemKalem = donemKalemleri(veri, donem, bugun);
-  const serbest = para - ayrilanTutar([...donemKalem, ...donemTaksitleri(veri, donem, bugun)]) - (veri.kose ?? 0);
+  const serbest = para - ayrilanTutar([...donemKalem, ...donemTaksitleri(veri, donem, bugun)]) - kenardaPara(veri);
   if (ayar.altSinir && serbest < ayar.altSinir) {
     plan.push({ anahtar: `para:${donem.baslangic}`, zaman: 0, baslik: 'Serbest para', metin: `Serbest paran ${paraYaz(ayar.altSinir)} altına indi: ${paraYaz(serbest)}.` });
   }
