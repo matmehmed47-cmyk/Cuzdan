@@ -1069,7 +1069,152 @@ button.varlik {
 }
 
 .hizli {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+button.hizli-dugme {
+  font-size: 0.76rem;
+}
+
+/* Hesap makinesi */
+
+.tutar-satir {
+  display: flex;
+  gap: 8px;
+}
+
+.tutar-satir input {
+  flex: 1;
+}
+
+.tutar-satir button.simge {
+  width: 50px;
+  min-height: 50px;
+  color: var(--ana);
+}
+
+.hesap-ekran {
+  min-height: 112px;
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--hero);
+  color: #ffffff;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hesap-ifade {
+  min-height: 24px;
+  margin: 0 0 4px;
+  color: rgb(255 255 255 / 86%);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.hesap-sonuc {
+  margin: 0;
+  font-size: clamp(1.8rem, 9vw, 2.4rem);
+  font-weight: 750;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.hesap-sonuc.uyari {
+  font-size: 1.4rem;
+}
+
+.tuslar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tuslar button {
+  min-height: 60px;
+  margin: 0;
+  padding: 0;
+  border-color: var(--cizgi);
+  border-radius: 16px;
+  background: var(--yuzey);
+  box-shadow: var(--golge);
+  color: var(--yazi);
+  font-size: 1.45rem;
+  font-weight: 600;
+}
+
+.tuslar button.islem {
+  border-color: transparent;
+  background: var(--vurgu-zemin);
+  color: var(--ana);
+}
+
+.tuslar button.esit {
+  border-color: var(--ana);
+  background: var(--ana);
+  color: var(--ana-yazi);
+}
+
+.tuslar button.genis-tus {
+  grid-column: span 2;
+}
+
+.hesap-perde {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 45%);
+}
+
+.hesap-pano {
+  width: min(100%, 460px);
+  max-height: 100dvh;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  border-radius: 24px 24px 0 0;
+  background: var(--zemin);
+}
+
+.hesap-pano .ust {
+  min-height: 40px;
+  margin-bottom: 8px;
+}
+
+.hesap-pano h2 {
+  flex: 1;
+  margin: 0;
+}
+
+.hesap-gecmis {
+  display: grid;
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--cizgi);
+  border-radius: 0;
+  background: transparent;
+  color: var(--yazi);
+  font-weight: 400;
+  text-align: right;
+}
+
+button.hesap-gecmis + button.hesap-gecmis {
+  margin: 0;
+}
+
+.hesap-gecmis span {
+  color: var(--soluk);
+  font-size: 0.82rem;
+}
+
+.hesap-gecmis strong {
+  font-variant-numeric: tabular-nums;
 }
 
 @media (min-width: 820px) {

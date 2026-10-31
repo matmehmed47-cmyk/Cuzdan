@@ -478,3 +478,77 @@ test('birikimli yedek geçerlidir, bozuk birikim reddedilir', () => {
   assert.equal(veriGecerliMi({ ...temel, birikimler: [{ ...kayit, tur: 'gumus' }] }), false);
   assert.equal(veriGecerliMi({ ...temel, birikimler: [{ ...kayit, miktar: 0 }] }), false);
 });
+
+const hesapTuslari = async (metin) => {
+  const { tusla, yeniDurum } = await import('../hesap.js');
+  return [...metin].reduce(tusla, yeniDurum());
+};
+
+test('hesap makinesi: öğretmen örnekleri', async () => {
+  const { hesapla, sonucYaz, ifadeYaz, SIFIRA_BOLME } = await import('../hesap.js');
+  const sonuc = async (tuslar) => sonucYaz(hesapla((await hesapTuslari(tuslar)).parcalar).deger);
+  const ornekler = [
+    ['0,1+0,2', '0,3'], ['2+3×4', '14'], ['10-2-3', '5'], ['20÷2×5', '50'],
+    ['1000+10%', '1.100'], ['1000-10%', '900'], ['200×10%', '20'], ['50%', '0,5'], ['200+10%+10%', '242'],
+    ['2+3×10%', '2,3'], ['1÷3', '0,33333333'], ['2÷3', '0,66666667'], ['3×45', '135'], ['0,1×0,2', '0,02'],
+    ['1,10+2,20', '3,3'], ['5-8', '-3'], ['1000000×1000000', '1.000.000.000.000'], ['0÷5', '0'], ['12,5×4', '50'],
+  ];
+  for (const [tuslar, beklenen] of ornekler) assert.equal(await sonuc(tuslar), beklenen, tuslar);
+  assert.equal(hesapla((await hesapTuslari('5÷0')).parcalar).hata, SIFIRA_BOLME);
+  assert.equal(hesapla((await hesapTuslari('5÷0,0')).parcalar).hata, SIFIRA_BOLME);
+  assert.equal(await sonuc('1÷3=×3'), '1');
+  const { sayidanParca, tusla } = await import('../hesap.js');
+  const eksi = ['+', '⌫', '⌫', '⌫'].reduce(tusla, sayidanParca('-1.234,5'));
+  assert.equal(hesapla(eksi.parcalar), null);
+  assert.equal(await sonuc('2+3=×2'), '10');
+  assert.equal(ifadeYaz((await hesapTuslari('1234,5+10%')).parcalar), '1.234,5 + %10');
+});
+
+test('hesap makinesi: tuş davranışı', async () => {
+  const { hesapla, sonucYaz } = await import('../hesap.js');
+  const sonuc = async (tuslar) => sonucYaz(hesapla((await hesapTuslari(tuslar)).parcalar).deger);
+  assert.equal(await sonuc('12⌫'), '1');
+  assert.equal(await sonuc('5+×3'), '15');
+  assert.equal(await sonuc('5+'), '5');
+  assert.equal(await sonuc('007'), '7');
+  assert.equal(await sonuc('1,2,3'), '1,23');
+  assert.equal(await sonuc(',5+,5'), '1');
+  assert.equal(await sonuc('5%⌫'), '5');
+  assert.equal(await sonuc('9=4'), '4');
+  assert.equal(await sonuc('9C4'), '4');
+  assert.equal(await sonuc('12%%'), '0,12');
+  assert.equal(await sonuc('×5'), '5');
+  assert.equal((await hesapTuslari('12=⌫')).parcalar.length, 0);
+  assert.equal(hesapla((await hesapTuslari('')).parcalar), null);
+  assert.equal(hesapla((await hesapTuslari('+')).parcalar), null);
+  assert.equal(await sonuc('1234567890123456789'), '123.456.789.012.345');
+});
+
+test('hesap makinesi: kuruş yuvarlama ve sınırlar', async () => {
+  const { hesapla, kurusaCevir } = await import('../hesap.js');
+  const kurus = async (tuslar) => kurusaCevir(hesapla((await hesapTuslari(tuslar)).parcalar).deger);
+  assert.equal(await kurus('3×45'), 13500);
+  assert.equal(await kurus('10÷3'), 333);
+  assert.equal(await kurus('1,005+0'), 101);
+  assert.equal(await kurus('5-8'), null);
+  assert.equal(await kurus('0'), null);
+  assert.equal(await kurus('999999999×999999999'), null);
+});
+
+test('hesap makinesi: 1000 rastgele işlem kesin sonuçla aynı', async () => {
+  const { hesapla, sonucYaz } = await import('../hesap.js');
+  let tohum = 47;
+  const sayi = (ust) => {
+    tohum = (tohum * 1103515245 + 12345) % 2147483648;
+    return tohum % ust;
+  };
+  for (let i = 0; i < 1000; i += 1) {
+    const [a, b, c, d] = [sayi(99999) + 1, sayi(99999) + 1, sayi(99999) + 1, sayi(9999) + 1];
+    const kuruslu = sayi(100);
+    const tuslar = `${a}+${b}×${c}-${d}+0,${String(kuruslu).padStart(2, '0')}`;
+    const yuzluk = (BigInt(a) + BigInt(b) * BigInt(c) - BigInt(d)) * 100n + BigInt(kuruslu);
+    const sonuc = hesapla((await hesapTuslari(tuslar)).parcalar).deger;
+    assert.equal(sonuc.pay * 100n, yuzluk * sonuc.payda, tuslar);
+    assert.match(sonucYaz(sonuc), /^-?[\d.]+(,\d+)?$/);
+  }
+});

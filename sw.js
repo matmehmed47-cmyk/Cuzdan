@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-9';
+const SURUM = 'cuzdan-10';
 const DOSYALAR = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const DOSYALAR = [
   './taksit.js',
   './birikim.js',
   './piyasa.js',
+  './hesap.js',
   './manifest.webmanifest',
   './ikon/ikon-180.png',
   './ikon/ikon-192.png',

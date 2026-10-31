@@ -638,3 +638,42 @@ test('param ne alır: satış fiyatıyla hesaplar, serbest parayı getirir', asy
   assert.match(metin(window), /Fiyat yok/);
   assert.match(metin(window), /Yaklaşık hesaptır/);
 });
+
+test('hesap makinesi: ekran, son işlemler, harcamaya aktarma, formu bozmadan aktarma', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100000 } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const bas = (tuslar) => [...tuslar].forEach((t) => document.querySelector(`[data-tus="${t}"]`).click());
+  const sonuc = () => document.getElementById('hesap-sonuc').textContent;
+
+  dugme('Hesap makinesi').click();
+  assert.equal(sonuc(), '0');
+  assert.equal(dugme('Harcamaya aktar').disabled, true);
+  bas('5÷0');
+  assert.equal(sonuc(), 'Sıfıra bölünemez');
+  assert.equal(dugme('Harcamaya aktar').disabled, true);
+  bas('C3×45=');
+  assert.equal(sonuc(), '135');
+  assert.match(metin(window), /3 × 45/);
+
+  dugme('Harcamaya aktar').click();
+  assert.equal(document.getElementById('tutar').value, '135,00 TL');
+  dugme('Market').click();
+  document.getElementById('not').value = 'Domates';
+  document.querySelector('[aria-label="Hesap makinesi"]').click();
+  bas('2×50=');
+  dugme('Tutara aktar').click();
+  assert.equal(document.querySelector('.hesap-perde'), null);
+  assert.equal(document.getElementById('tutar').value, '100,00 TL');
+  assert.equal(document.getElementById('not').value, 'Domates');
+  gonder(window, document.querySelector('form'));
+
+  const kayit = JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+  assert.deepEqual(
+    [kayit.donemler[baslangic].hareketler[0].kurus, kayit.donemler[baslangic].hareketler[0].kategori],
+    [10000, 'Market'],
+  );
+  assert.equal(document.getElementById('ana-para').textContent, '900,00 TL');
+});

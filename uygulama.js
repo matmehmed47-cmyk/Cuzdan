@@ -75,6 +75,7 @@ import {
   turKayitlari,
   yillar,
 } from './birikim.js';
+import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
 import {
   ALTINLAR,
   DOVIZLER,
@@ -106,6 +107,7 @@ const IKONLAR = {
   kalem: '<path d="M4 20l1-4.500L16.5 4l3.5 3.500L8.5 19z"/>',
   yenile: '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.500h-4.5"/>',
   dolar: '<circle cx="12" cy="12" r="8.5"/><path d="M15 9c-.5-1.2-1.7-1.8-3-1.8-1.7 0-3 .9-3 2.3 0 3.2 6 1.7 6 4.9 0 1.4-1.3 2.3-3 2.3-1.3 0-2.5-.6-3-1.8"/><path d="M12 5.500v13"/>',
+  hesap: '<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7h7"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/>',
   cuzdan: '<path d="M4 7.500A2.5 2.5 0 0 1 6.5 5H17v3"/><path d="M4 7.500V17a2.5 2.5 0 0 0 2.5 2.500H20V8H6.5"/><circle cx="16" cy="13.8" r="1.1"/>',
 };
 
@@ -429,6 +431,7 @@ function anaEkran() {
           [
             ['Gelirler', 'gelir', () => gelirlerEkrani()],
             ['Ortak ev', 'ortak', () => ortakEkrani()],
+            ['Hesap makinesi', 'hesap', hesapEkrani],
             ['Geçmiş dönemler', 'gecmis', gecmisEkrani],
           ].map(([ad, simge, ac]) => el('button', { type: 'button', sinif: 'hizli-dugme', onclick: ac }, ikon(simge), ad)),
         ),
@@ -914,11 +917,12 @@ function cipSecici(adlar, ilk, yeniId, yeniAd) {
   };
 }
 
-function harcamaFormu(donem, mevcut = null, geri = anaEkran, ortakBaslangic = false) {
+function harcamaFormu(donem, mevcut = null, geri = anaEkran, ortakBaslangic = false, ilkTutar = '') {
   const bugun = bugunTR();
   const hata = hataSatiri();
   const adlar = siraliKategoriler(veri);
   if (mevcut?.kategori && !adlar.includes(mevcut.kategori)) adlar.unshift(mevcut.kategori);
+  const [tutarEtiketi, tutarKutusu] = tutarAlani('tutar', 'Tutar', mevcut ? paraYaz(mevcut.kurus) : ilkTutar);
   const ilkSecim = mevcut?.kategori ?? (!mevcut && ortakBaslangic && adlar.includes('Ev') ? 'Ev' : null);
   const secici = cipSecici(adlar, ilkSecim, 'yeni-kategori', 'kategori');
 
@@ -950,7 +954,13 @@ function harcamaFormu(donem, mevcut = null, geri = anaEkran, ortakBaslangic = fa
         geri();
       },
     },
-    tutarAlani('tutar', 'Tutar', mevcut ? paraYaz(mevcut.kurus) : ''),
+    tutarEtiketi,
+    el(
+      'div',
+      { sinif: 'tutar-satir' },
+      tutarKutusu,
+      el('button', { type: 'button', sinif: 'simge', 'aria-label': 'Hesap makinesi', onclick: () => hesapAc(tutarKutusu) }, ikon('hesap')),
+    ),
     el('p', { sinif: 'etiket' }, 'Kategori'),
     secici.kutu,
     secici.yeniKutu,
@@ -1869,6 +1879,121 @@ function piyasaBaslat() {
     if (document.visibilityState !== 'hidden') piyasaYenile();
   }, YENILEME_SURESI);
   sayac.unref?.();
+}
+
+/* Hesap makinesi */
+
+const HESAP_ANAHTAR = 'cuzdan.hesap';
+
+function hesapGecmisi() {
+  try {
+    const liste = JSON.parse(localStorage.getItem(HESAP_ANAHTAR));
+    return Array.isArray(liste) ? liste.filter((k) => typeof k?.ifade === 'string' && typeof k?.sonuc === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function hesapGecmisineEkle(kayit) {
+  try {
+    localStorage.setItem(HESAP_ANAHTAR, JSON.stringify([kayit, ...hesapGecmisi()].slice(0, 5)));
+  } catch {
+    // Geçmiş tutulamasa da hesap çalışır.
+  }
+}
+
+function hesapPaneli(aktarYazisi, aktar) {
+  let durum = yeniDurum();
+  const ifade = el('p', { sinif: 'hesap-ifade' });
+  const sonuc = el('p', { sinif: 'hesap-sonuc', role: 'status', id: 'hesap-sonuc' });
+  const aktarDugme = el('button', { type: 'button', onclick: () => aktar(paraYaz(hesaplananKurus())) }, aktarYazisi);
+  const gecmis = el('div');
+
+  function hesaplananKurus() {
+    const cevap = hesapla(durum.parcalar);
+    return cevap?.deger ? kurusaCevir(cevap.deger) : null;
+  }
+
+  function ciz() {
+    const cevap = hesapla(durum.parcalar);
+    ifade.textContent = durum.bitti ? '' : ifadeYaz(durum.parcalar);
+    sonuc.textContent = cevap?.hata ?? (cevap ? sonucYaz(cevap.deger) : '0');
+    sonuc.className = cevap?.hata === SIFIRA_BOLME ? 'hesap-sonuc uyari' : 'hesap-sonuc';
+    aktarDugme.disabled = hesaplananKurus() === null;
+    gecmis.replaceChildren(...hesapGecmisi().map((k) => el(
+      'button',
+      {
+        type: 'button',
+        sinif: 'hesap-gecmis',
+        onclick: () => {
+          durum = sayidanParca(k.sonuc);
+          ciz();
+        },
+      },
+      el('span', {}, k.ifade),
+      el('strong', {}, k.sonuc),
+    )));
+  }
+
+  function bas(tus) {
+    if (tus === '=' && !durum.bitti) {
+      const cevap = hesapla(durum.parcalar);
+      if (cevap?.deger) hesapGecmisineEkle({ ifade: ifadeYaz(durum.parcalar), sonuc: sonucYaz(cevap.deger) });
+    }
+    durum = tusla(durum, tus);
+    ciz();
+  }
+
+  const tuslar = [
+    ['C', 'islem', 'Temizle'], ['⌫', 'islem', 'Son rakamı sil'], ['%', 'islem', 'Yüzde'], ['÷', 'islem', 'Böl'],
+    ['7'], ['8'], ['9'], ['×', 'islem', 'Çarp'],
+    ['4'], ['5'], ['6'], ['-', 'islem', 'Çıkar', '−'],
+    ['1'], ['2'], ['3'], ['+', 'islem', 'Topla'],
+    ['0', 'genis-tus'], [','], ['=', 'esit', 'Eşittir'],
+  ];
+  ciz();
+  return el(
+    'div',
+    {},
+    el('div', { sinif: 'hesap-ekran' }, ifade, sonuc),
+    el('div', { sinif: 'tuslar' }, tuslar.map(([tus, sinif, ad, yazi]) => el(
+      'button',
+      { type: 'button', sinif: sinif ?? '', 'data-tus': tus, 'aria-label': ad ?? tus, onclick: () => bas(tus) },
+      yazi ?? tus,
+    ))),
+    aktarDugme,
+    el('div', { sinif: 'bosluk' }, gecmis),
+  );
+}
+
+function hesapEkrani() {
+  const donem = donemBul(veri.ayar, bugunTR());
+  if (!veri.donemler[donem.baslangic]) return anaEkran();
+  goster(
+    ustBolum('Hesap makinesi', anaEkran),
+    hesapPaneli('Harcamaya aktar', (tutar) => harcamaFormu(donem, null, anaEkran, false, tutar)),
+  );
+}
+
+// Form ekranda kaldığı için yazılan kategori ve not kaybolmaz.
+function hesapAc(kutu) {
+  const kapat = () => perde.remove();
+  const pano = el(
+    'div',
+    { sinif: 'hesap-pano', role: 'dialog', 'aria-label': 'Hesap makinesi' },
+    el(
+      'div',
+      { sinif: 'ust' },
+      el('h2', {}, 'Hesap makinesi'),
+      el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: kapat }, 'Kapat'),
+    ),
+    hesapPaneli('Tutara aktar', (tutar) => {
+      kutu.value = tutar;
+      kapat();
+    }),
+  );
+  const perde = el('div', { sinif: 'hesap-perde' }, pano);
+  kok.append(perde);
 }
 
 /* Ayarlar */
