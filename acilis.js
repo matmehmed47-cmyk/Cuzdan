@@ -3,10 +3,10 @@
 import { imzaSvg } from './imza.js';
 import { sesCal, sesCalabilirMi } from './sesler.js';
 
-const SURE = 3900;
+const SURE = 4400;
 const KISA_SURE = 900;
 const IMZA_BAS = 2.35;
-const IMZA_HIZ = 0.32;
+const IMZA_HIZ = 0.6;
 const SES_ANI = 800;
 
 const LOGO = `<svg class="a-logo" viewBox="0 0 320 300" aria-hidden="true">
