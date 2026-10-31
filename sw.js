@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-5';
+const SURUM = 'cuzdan-6';
 const DOSYALAR = [
   './',
   './index.html',

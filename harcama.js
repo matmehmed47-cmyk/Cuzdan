@@ -1,7 +1,9 @@
 // Harcama kaydı dönemin hareketler listesinde durur; düzeltme ve silme için listedeki sırası kullanılır.
 
 export const VARSAYILAN_KATEGORILER = ['Meyve sebze', 'Market', 'Yemek', 'Ulaşım', 'Ev', 'Sağlık', 'Giyim', 'Eğlence'];
+export const VARSAYILAN_KAYNAKLAR = ['Ek ders', 'Ek iş', 'Hediye', 'Harçlık', 'Geri gelen borç'];
 export const DIGER = 'Diğer';
+export const EK_GELIR = 'Ek gelir';
 export const KAYITSIZ = 'Kayıtsız';
 
 function ayniAd(a, b) {
@@ -13,14 +15,28 @@ export function kategoriler(veri) {
 }
 
 // Eşit sayıda kullanılanlar listedeki sırasını korur.
-export function siraliKategoriler(veri) {
+function sikligaGore(veri, liste, alan) {
   const sayac = new Map();
   for (const kayit of Object.values(veri.donemler)) {
     for (const h of kayit.hareketler ?? []) {
-      if (h.tur === 'harcama' && h.kategori) sayac.set(h.kategori, (sayac.get(h.kategori) ?? 0) + 1);
+      if (h[alan]) sayac.set(h[alan], (sayac.get(h[alan]) ?? 0) + 1);
     }
   }
-  return [...kategoriler(veri)].sort((a, b) => (sayac.get(b) ?? 0) - (sayac.get(a) ?? 0));
+  return [...liste].sort((a, b) => (sayac.get(b) ?? 0) - (sayac.get(a) ?? 0));
+}
+
+export function siraliKategoriler(veri) {
+  return sikligaGore(veri, kategoriler(veri), 'kategori');
+}
+
+export function siraliKaynaklar(veri) {
+  return sikligaGore(veri, veri.kaynaklar ?? VARSAYILAN_KAYNAKLAR, 'kaynak');
+}
+
+export function kaynakEkle(veri, ad) {
+  const liste = veri.kaynaklar ?? VARSAYILAN_KAYNAKLAR;
+  const mevcut = liste.find((k) => ayniAd(k, ad));
+  return mevcut ? { veri, ad: mevcut } : { veri: { ...veri, kaynaklar: [...liste, ad] }, ad };
 }
 
 export function kategoriEkle(veri, ad) {
@@ -103,4 +119,21 @@ export function ortakOzet(kayit, kisi) {
   const harcanan = toplamAl(ortakListesi(kayit));
   const geriAlinan = toplamAl(geriAlinanlar(kayit));
   return { harcanan, geriAlinan, kalan: harcanan - geriAlinan, kisiBasi: kisi ? Math.round(harcanan / kisi) : null };
+}
+
+// Ortak evden geri alınan para kendi ekranında durur, ek gelir sayılmaz.
+export function gelirListesi(kayit) {
+  return (kayit.hareketler ?? [])
+    .map((h, sira) => ({ ...h, sira }))
+    .filter((h) => h.tur === 'gelir' && !h.ortak)
+    .sort((a, b) => b.tarih.localeCompare(a.tarih) || b.sira - a.sira);
+}
+
+export function gelirEkle(veri, baslangic, bilgi) {
+  return hareketleriYaz(veri, baslangic, [...(veri.donemler[baslangic].hareketler ?? []), { tur: 'gelir', ...bilgi }]);
+}
+
+export function gelirOzet(kayit) {
+  const ekGelir = gelirListesi(kayit).reduce((t, h) => t + h.kurus, 0);
+  return { baslangic: kayit.para, ekGelir, toplam: kayit.para + ekGelir };
 }

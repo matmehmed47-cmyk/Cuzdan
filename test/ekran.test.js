@@ -373,6 +373,56 @@ test('ortak ev: buradan yazılır, ana paradan düşer, geri alınır, Geçmiş\
   assert.equal(document.getElementById('ortak-kisi'), null);
 });
 
+test('ek gelir kaynak ve notla eklenir, düzeltilir, silinir, Geçmiş\'te kalır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const eski = { tur: 'gelir', kurus: 700, tarih: '2000-01-20', kaynak: 'Hediye' };
+  const ortak = { tur: 'gelir', kurus: 300, tarih: bugunTR(), ortak: true };
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { '2000-01-15': { para: 500, hareketler: [eski] }, [baslangic]: { para: 100000, hareketler: [ortak] } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayitlar = () => JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[baslangic].hareketler;
+
+  dugme('+ Gelir').click();
+  document.getElementById('tutar').value = '2.000';
+  dugme('Ek ders').click();
+  document.getElementById('not').value = '3 saat';
+  gonder(window, document.querySelector('form'));
+  assert.equal(document.getElementById('ana-para').textContent, '3.003,00 TL');
+  assert.equal(kayitlar()[1].kaynak, 'Ek ders');
+
+  dugme('+ Gelir').click();
+  document.getElementById('tutar').value = '100';
+  dugme('+ Yeni kaynak').click();
+  document.getElementById('yeni-kaynak').value = 'Kermes';
+  gonder(window, document.querySelector('form'));
+  assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).kaynaklar.at(-1), 'Kermes');
+
+  dugme('Gelirler').click();
+  assert.doesNotMatch(metin(window), /null|undefined/);
+  assert.match(metin(window), /Ek gelir2\.100,00 TL/);
+  assert.match(metin(window), /Toplam3\.100,00 TL/);
+  assert.match(metin(window), /3 saat/);
+
+  [...document.querySelectorAll('button')].filter((d) => d.textContent === 'Düzenle').at(-1).click();
+  document.getElementById('tutar').value = '1.000';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayitlar()[1].kurus, 100000);
+  assert.equal(kayitlar()[1].tur, 'gelir');
+  assert.equal(kayitlar()[1].not, '3 saat');
+
+  [...document.querySelectorAll('button')].filter((d) => d.textContent === 'Düzenle').at(-1).click();
+  dugme('Geliri sil').click();
+  assert.equal(kayitlar().length, 2);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  dugme('Geçmiş dönemler').click();
+  dugme('Gelirleri gör').click();
+  assert.match(metin(window), /Hediye7,00 TL/);
+  assert.equal(dugme('Düzenle'), undefined);
+  assert.equal(dugme('+ Gelir'), undefined);
+});
+
 test('para eksiye düşerse açıkça yazar', async () => {
   const ayar = ilkAyar(15);
   const baslangic = donemBul(ayar, bugunTR()).baslangic;

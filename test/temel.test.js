@@ -17,6 +17,9 @@ import {
 import {
   VARSAYILAN_KATEGORILER,
   geriAldimEkle,
+  gelirEkle,
+  gelirListesi,
+  gelirOzet,
   harcamaEkle,
   harcamaGuncelle,
   harcamaListesi,
@@ -25,9 +28,11 @@ import {
   kategoriEkle,
   kategoriSil,
   kategoriToplamlari,
+  kaynakEkle,
   ortakListesi,
   ortakOzet,
   siraliKategoriler,
+  siraliKaynaklar,
 } from '../harcama.js';
 
 test('para: Türkçe yazımları doğru çözer', () => {
@@ -312,6 +317,19 @@ test('ortak ev: tutar ana paradan düşer, kişi başı ve geri alınan doğru h
   assert.equal(kalanPara(geri.donemler[BAS]), 67000);
   assert.equal(ortakOzet(geri.donemler[BAS]).kalan, 28000);
   assert.equal(veriGecerliMi(JSON.parse(JSON.stringify(geri))), true);
+});
+
+test('gelir: kaynak sıklığa göre dizilir, geri alınan ek gelir sayılmaz', () => {
+  let veri = gelirEkle(harcamaVerisi(), BAS, { kurus: 200000, kaynak: 'Hediye', tarih: BAS });
+  veri = geriAldimEkle(veri, BAS, { kurus: 5000, tarih: BAS });
+  const kayit = veri.donemler[BAS];
+  assert.equal(kalanPara(kayit), 305000);
+  assert.equal(gelirListesi(kayit).length, 1);
+  assert.deepEqual(gelirOzet(kayit), { baslangic: 100000, ekGelir: 200000, toplam: 300000 });
+  assert.equal(siraliKaynaklar(veri)[0], 'Hediye');
+  assert.equal(kaynakEkle(veri, 'hediye').ad, 'Hediye');
+  assert.equal(kaynakEkle(veri, 'Kermes').veri.kaynaklar.at(-1), 'Kermes');
+  assert.equal(veriGecerliMi({ ...veri, kaynaklar: [''] }), false);
 });
 
 test('ortak ev: yedek doğrulaması bozuk kişi sayısını reddeder', () => {
