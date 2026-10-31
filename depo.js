@@ -127,6 +127,8 @@ function faturalarGecerli(faturalar) {
         AY.test(f.ilkAy) &&
         (f.kurus === undefined || (Number.isSafeInteger(f.kurus) && f.kurus > 0)) &&
         (f.tur === 'degisken' || f.kurus !== undefined) &&
+        (f.cesit === undefined || f.cesit === 'kart' || f.cesit === 'abonelik') &&
+        (f.kesim === undefined || (Number.isInteger(f.kesim) && f.kesim >= 1 && f.kesim <= 31)) &&
         (f.atlanan === undefined || (Array.isArray(f.atlanan) && f.atlanan.every((a) => AY.test(a)))),
     )
   );
@@ -151,6 +153,8 @@ export function veriGecerliMi(veri) {
   if (!faturalarGecerli(veri.faturalar) || !kategorilerGecerli(veri.kategoriler)) return false;
   if (!ortakKisiGecerli(veri.ortakKisi) || !kategorilerGecerli(veri.kaynaklar)) return false;
   if (!taksitlerGecerli(veri.taksitler) || !birikimlerGecerli(veri.birikimler) || !bildirimGecerli(veri.bildirim)) return false;
+  const tutarGecerli = (k) => k === undefined || (Number.isSafeInteger(k) && k > 0);
+  if (!tutarGecerli(veri.hedef) || !tutarGecerli(veri.kose)) return false;
   if (!veri.donemler || typeof veri.donemler !== 'object') return false;
   return Object.entries(veri.donemler).every(
     ([tarih, donem]) => TARIH.test(tarih) && Number.isSafeInteger(donem?.para) && hareketlerGecerli(donem.hareketler),

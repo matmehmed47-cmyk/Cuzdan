@@ -649,3 +649,72 @@ test('uygulama kapalıyken: vakti gelen bir kez gösterilir, eski atlanır', asy
   await calistir();
   assert.deepEqual(gosterilen, ['Elektrik']);
 });
+
+test('takvim: ayın başı, ödeme, maaş ve işlem doğru güne düşer', async () => {
+  const { ilkSutun, takvimAyi } = await import('../takvim.js');
+  assert.equal(ilkSutun('2026-11'), 6);
+  assert.equal(ilkSutun('2026-12'), 1);
+  const veri = ornekVeri();
+  veri.donemler['2026-11-15'].hareketler = [{ tur: 'harcama', kurus: 100, tarih: '2026-11-16' }];
+  const gunler = takvimAyi(veri, '2026-11', '2026-11-16');
+  assert.equal(gunler.length, 30);
+  assert.equal(gunler[19].odemeler[0].ad, 'Elektrik');
+  assert.equal(gunler[14].maas, true);
+  assert.equal(gunler[15].hareketler.length, 1);
+  assert.equal(takvimAyi(veri, '2027-02', '2026-11-16').length, 28);
+});
+
+test('sesli giriş: tutar, kategori ve not ayrılır', async () => {
+  const { konusmaCoz } = await import('../ses.js');
+  const adlar = ['Market', 'Meyve sebze', 'Ulaşım'];
+  assert.deepEqual(konusmaCoz('market 250 lira', adlar), { kurus: 25000, kategori: 'Market', not: '' });
+  assert.deepEqual(konusmaCoz('Markete iki yüz elli lira', adlar), { kurus: 25000, kategori: 'Market', not: '' });
+  assert.deepEqual(konusmaCoz('meyve sebze 100 lira 2 kilo elma', adlar), { kurus: 10000, kategori: 'Meyve sebze', not: '2 kilo elma' });
+  assert.deepEqual(konusmaCoz('bin beş yüz tl kırtasiye', adlar), { kurus: 150000, kategori: null, not: 'kırtasiye' });
+  assert.equal(konusmaCoz('yüz yirmi beş lira elli kuruş', adlar).kurus, 12550);
+  assert.equal(konusmaCoz('12 lira 50 kuruş', adlar).kurus, 1250);
+  assert.equal(konusmaCoz('1.250 tl', adlar).kurus, 125000);
+  assert.equal(konusmaCoz('bir şey aldım', adlar).kurus, 100);
+  assert.equal(konusmaCoz('markete gittim', adlar).kurus, null);
+  assert.equal(konusmaCoz('', adlar).kurus, null);
+});
+
+test('kart: bugünkü alışverişin ödeme tarihi', async () => {
+  const { kartOdemeTarihi } = await import('../fatura.js');
+  assert.equal(kartOdemeTarihi(5, 15, '2026-11-03'), '2026-11-15');
+  assert.equal(kartOdemeTarihi(5, 15, '2026-11-06'), '2026-12-15');
+  assert.equal(kartOdemeTarihi(25, 5, '2026-11-20'), '2026-12-05');
+  assert.equal(kartOdemeTarihi(25, 5, '2026-12-26'), '2027-02-05');
+});
+
+test('abonelik üç ayda bir sorulur, köşedeki para serbest parayı azaltır', async () => {
+  const { bildirimPlani } = await import('../bildirim.js');
+  const ayar = { gunOnce: 0, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' };
+  const veri = ornekVeri({ faturalar: [{ id: 'a', ad: 'Dizi', tur: 'sabit', gun: 20, ilkAy: '2026-08', kurus: 10000, cesit: 'abonelik' }] });
+  veri.donemler['2026-11-15'].hareketler = ['2026-08', '2026-09', '2026-10', '2026-11'].map((ay) => ({ tur: 'fatura', faturaId: 'a', ay, ad: 'Dizi', kurus: 10000, tarih: '2026-11-15' }));
+  const kayit = veri.donemler['2026-11-15'];
+  assert.deepEqual(bildirimPlani(veri, ornekDonem, kayit, '2026-11-16', ayar).map((k) => k.anahtar), ['abonelik:a:2026-11']);
+  assert.deepEqual(bildirimPlani(veri, ornekDonem, kayit, '2026-12-16', ayar).filter((k) => k.anahtar.startsWith('abonelik')), []);
+  const kose = bildirimPlani({ ...veri, kose: 495000 }, ornekDonem, kayit, '2026-11-16', { ...ayar, altSinir: 1000 });
+  assert.ok(kose.some((k) => k.anahtar.startsWith('para:')));
+});
+
+test('hedef, köşe ve kart alanı yedekte doğrulanır', () => {
+  const temel = { surum: 1, ad: 'Ev', ayar: ilkAyar(15), donemler: {} };
+  assert.equal(veriGecerliMi({ ...temel, hedef: 500, kose: 100 }), true);
+  assert.equal(veriGecerliMi({ ...temel, hedef: -1 }), false);
+  assert.equal(veriGecerliMi({ ...temel, kose: 'çok' }), false);
+  const fatura = { id: 'f', ad: 'Kart', tur: 'degisken', gun: 5, ilkAy: '2026-11', cesit: 'kart', kesim: 25 };
+  assert.equal(veriGecerliMi({ ...temel, faturalar: [fatura] }), true);
+  assert.equal(veriGecerliMi({ ...temel, faturalar: [{ ...fatura, kesim: 40 }] }), false);
+  assert.equal(veriGecerliMi({ ...temel, faturalar: [{ ...fatura, cesit: 'x' }] }), false);
+});
+
+test('internetsiz çalışma: her uygulama dosyası önbellek listesinde', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
+  const kok = new URL('../', import.meta.url);
+  for (const ad of readdirSync(kok).filter((d) => d.endsWith('.js') && d !== 'sw.js')) {
+    assert.ok(sw.includes(`'./${ad}'`), ad);
+  }
+});

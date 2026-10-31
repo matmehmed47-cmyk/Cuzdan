@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-11';
+const SURUM = 'cuzdan-12';
 const BILDIRIM = 'cuzdan-bildirim';
 const EN_ESKI = 2 * 24 * 60 * 60 * 1000;
 const DOSYALAR = [
@@ -16,6 +16,8 @@ const DOSYALAR = [
   './piyasa.js',
   './hesap.js',
   './bildirim.js',
+  './takvim.js',
+  './ses.js',
   './manifest.webmanifest',
   './ikon/ikon-180.png',
   './ikon/ikon-192.png',

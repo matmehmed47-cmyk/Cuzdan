@@ -7,12 +7,19 @@ import { donemTaksitleri } from './taksit.js';
 
 export const VARSAYILAN_AYAR = { gunOnce: 3, saat: '09:00', maas: true, gunSonu: false, gunSonuSaat: '21:00' };
 const ILERI_GUN = 14;
+const ABONELIK_AY = 3;
 const GUN_SONU_ILERI = 3;
 const ANAHTAR = 'cuzdan.bildirim';
 const EN_COK_KAYIT = 300;
 
 export function bildirimAyari(veri) {
   return { ...VARSAYILAN_AYAR, ...veri.bildirim };
+}
+
+function ayFarki(ilk, son) {
+  const [y1, a1] = ilk.split('-').map(Number);
+  const [y2, a2] = son.split('-').map(Number);
+  return (y2 - y1) * 12 + a2 - a1;
 }
 
 function zaman(tarih, saat) {
@@ -62,7 +69,7 @@ export function bildirimPlani(veri, donem, kayit, bugun, ayar = bildirimAyari(ve
   if (ayar.maas) {
     for (const tarih of [donem.baslangic, donem.sonraki]) {
       if (tarih === donem.sonraki || tarih === bugun) {
-        plan.push({ anahtar: `maas:${tarih}`, zaman: zaman(tarih, ayar.saat), baslik: 'Maaş günü', metin: 'Bugün maaş günü. Elindeki parayı yazıp yeni döneme başlayabilirsin.' });
+        plan.push({ anahtar: `maas:${tarih}`, zaman: zaman(tarih, ayar.saat), baslik: 'Maaş günü', metin: 'Bugün maaş günü, faturalarını gözden geçir.' });
       }
     }
   }
@@ -76,8 +83,16 @@ export function bildirimPlani(veri, donem, kayit, bugun, ayar = bildirimAyari(ve
     }
   }
 
+  for (const fatura of veri.faturalar ?? []) {
+    if (fatura.cesit !== 'abonelik') continue;
+    const ay = bugun.slice(0, 7);
+    if (ayFarki(fatura.ilkAy, ay) > 0 && ayFarki(fatura.ilkAy, ay) % ABONELIK_AY === 0) {
+      plan.push({ anahtar: `abonelik:${fatura.id}:${ay}`, zaman: zaman(`${ay}-01`, ayar.saat), baslik: fatura.ad, metin: 'Bu aboneliği hâlâ kullanıyor musun? Kullanmıyorsan iptal etmeyi düşünebilirsin.' });
+    }
+  }
+
   const donemKalem = donemKalemleri(veri, donem, bugun);
-  const serbest = para - ayrilanTutar([...donemKalem, ...donemTaksitleri(veri, donem, bugun)]);
+  const serbest = para - ayrilanTutar([...donemKalem, ...donemTaksitleri(veri, donem, bugun)]) - (veri.kose ?? 0);
   if (ayar.altSinir && serbest < ayar.altSinir) {
     plan.push({ anahtar: `para:${donem.baslangic}`, zaman: 0, baslik: 'Serbest para', metin: `Serbest paran ${paraYaz(ayar.altSinir)} altına indi: ${paraYaz(serbest)}.` });
   }

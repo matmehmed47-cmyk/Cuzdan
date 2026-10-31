@@ -718,3 +718,75 @@ test('hatırlatma ayarı yoksa da açılır', async () => {
   const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100 } } }));
   assert.match(metin(window), /Serbest para/);
 });
+
+test('N bölümü: takvim, hedef, köşe, kredi kartı, sesli giriş, geçmiş grafiği', async () => {
+  const ayar = ilkAyar(15);
+  const bugun = bugunTR();
+  const baslangic = donemBul(ayar, bugun).baslangic;
+  let tanima;
+  const window = await uygulamaAc(JSON.stringify({
+    surum: 1,
+    ad: 'Ev',
+    ayar,
+    donemler: {
+      '2000-01-15': { para: 500, hareketler: [{ tur: 'harcama', kurus: 200, tarih: '2000-01-16' }] },
+      [baslangic]: { para: 100000, hareketler: [{ tur: 'harcama', kurus: 30000, tarih: bugun, kategori: 'Market' }] },
+    },
+  }), (w) => {
+    w.webkitSpeechRecognition = class {
+      start() { tanima = this; }
+    };
+  });
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+
+  dugme('Ödemeler').click();
+  dugme('Takvim').click();
+  assert.match(metin(window), /Market/);
+  document.querySelector('[aria-label="Sonraki ay"]').click();
+  assert.match(metin(window), /Pzt/);
+  dugme('Faturalar').click();
+
+  dugme('+ Fatura ekle').click();
+  document.getElementById('ad').value = 'Kart';
+  document.getElementById('cesit').value = 'kart';
+  document.getElementById('cesit').dispatchEvent(new window.Event('change'));
+  assert.equal(document.getElementById('tur').value, 'degisken');
+  document.getElementById('gun').value = '20';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Hesap kesim gününü seç/);
+  document.getElementById('kesim').value = '10';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().faturalar[0].kesim, 10);
+  assert.match(metin(window), /Bugünkü alışveriş/);
+
+  dugme('Harcamalar').click();
+  dugme('Aylık hedef koy').click();
+  document.getElementById('tutar').value = '200';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /100,00 TL üstünde/);
+  assert.match(metin(window), /Geçen döneme göre 298,00 TL fazla/);
+  assert.doesNotMatch(metin(window), /başarısız/i);
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  dugme('Köşeye para ayır').click();
+  document.getElementById('tutar').value = '100';
+  gonder(window, document.querySelector('form'));
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.match(metin(window), /Köşedeki para/);
+  assert.equal(document.getElementById('ana-para').textContent, '600,00 TL');
+
+  dugme('+ Harcama').click();
+  document.querySelector('[aria-label="Sesle yaz"]').click();
+  assert.match(metin(window), /Dinliyorum/);
+  tanima.onresult({ results: [[{ transcript: 'market iki yüz lira domates' }]] });
+  assert.equal(document.getElementById('tutar').value, '200,00 TL');
+  assert.equal(document.getElementById('not').value, 'domates');
+  assert.equal(kayit().donemler[baslangic].hareketler.length, 1);
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().donemler[baslangic].hareketler.at(-1).kategori, 'Market');
+
+  dugme('Geçmiş dönemler').click();
+  assert.match(metin(window), /Dönem dönem giden para/);
+});

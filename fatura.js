@@ -7,7 +7,7 @@ export function ayIleri(ay) {
   return a === 12 ? `${y + 1}-01` : `${y}-${String(a + 1).padStart(2, '0')}`;
 }
 
-function ayGeri(ay) {
+export function ayGeri(ay) {
   const [y, a] = ay.split('-').map(Number);
   return a === 1 ? `${y - 1}-12` : `${y}-${String(a - 1).padStart(2, '0')}`;
 }
@@ -73,6 +73,14 @@ export function baslangicAyi(gun, bugun, baslangic) {
     gecmisAy: gecmisTarih >= baslangic ? gecmisAy : null,
     gecmisTarih,
   };
+}
+
+// Bugünkü kart alışverişi sıradaki ekstreye girer; son ödeme günü kesimden sonraki ilk o gündür.
+export function kartOdemeTarihi(kesim, gun, bugun) {
+  const buAy = bugun.slice(0, 7);
+  const kesimAyi = vadeBul(buAy, kesim) >= bugun ? buAy : ayIleri(buAy);
+  const odeme = vadeBul(kesimAyi, gun);
+  return odeme > vadeBul(kesimAyi, kesim) ? odeme : vadeBul(ayIleri(kesimAyi), gun);
 }
 
 export function faturaEkle(veri, fatura) {
