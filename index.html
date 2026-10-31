@@ -17,6 +17,24 @@
   <div id="acilis" class="acilis"></div>
   <main id="uygulama"></main>
   <noscript>Cüzdan'ı kullanmak için JavaScript açık olmalı.</noscript>
+  <script>
+    // Kod başlamazsa açılış katmanı ekranda takılı kalmasın: önbellek temizlenir, yine olmazsa uyarı çıkar. Veriler silinmez.
+    setTimeout(function () {
+      if (window.cuzdanHazir) return;
+      var denendi = false;
+      try { denendi = sessionStorage.getItem('cuzdan.onarim'); } catch (e) {}
+      if (!denendi) {
+        try { sessionStorage.setItem('cuzdan.onarim', '1'); } catch (e) {}
+        var isler = [];
+        if (navigator.serviceWorker) isler.push(navigator.serviceWorker.getRegistrations().then(function (k) { return Promise.all(k.map(function (s) { return s.unregister(); })); }));
+        if (window.caches) isler.push(caches.keys().then(function (a) { return Promise.all(a.filter(function (d) { return d !== 'cuzdan-bildirim'; }).map(function (d) { return caches.delete(d); })); }));
+        Promise.all(isler).then(function () { location.reload(); }, function () { location.reload(); });
+        return;
+      }
+      var perde = document.getElementById('acilis');
+      if (perde) perde.innerHTML = '<p style="max-width:280px;margin:0;text-align:center">Cüzdan açılamadı. Verilerin silinmedi. Birkaç dakika sonra yeniden dene.</p><button type="button" style="width:auto;margin-top:16px" onclick="location.reload()">Yeniden dene</button>';
+    }, 6000);
+  </script>
   <script type="module" src="uygulama.js"></script>
 </body>
 </html>

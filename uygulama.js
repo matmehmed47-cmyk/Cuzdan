@@ -3415,3 +3415,9 @@ if ('serviceWorker' in navigator) {
 baslat();
 sesAyarla(veri?.ses !== false);
 acilisGoster();
+window.cuzdanHazir = true;
+try {
+  sessionStorage.removeItem('cuzdan.onarim');
+} catch {
+  // Onarım işareti silinemezse bir sonraki hatada uyarı daha erken çıkar.
+}

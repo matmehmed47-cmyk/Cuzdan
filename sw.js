@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-21';
+const SURUM = 'cuzdan-22';
 const BILDIRIM = 'cuzdan-bildirim';
 const EN_ESKI = 2 * 24 * 60 * 60 * 1000;
 const DOSYALAR = [
@@ -35,7 +35,8 @@ const DOSYALAR = [
 ];
 
 self.addEventListener('install', (olay) => {
-  olay.waitUntil(caches.open(SURUM).then((onbellek) => onbellek.addAll(DOSYALAR)));
+  // Tarayıcı önbelleğindeki eski dosyalar yeni sürüme karışmasın diye hepsi sunucudan alınır.
+  olay.waitUntil(caches.open(SURUM).then((onbellek) => onbellek.addAll(DOSYALAR.map((yol) => new Request(yol, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -50,8 +51,9 @@ self.addEventListener('activate', (olay) => {
 
 self.addEventListener('fetch', (olay) => {
   if (olay.request.method !== 'GET') return;
+  const ayni = new URL(olay.request.url).origin === self.location.origin;
   olay.respondWith(
-    fetch(olay.request)
+    fetch(ayni ? new Request(olay.request, { cache: 'no-cache' }) : olay.request)
       .then((cevap) => {
         if (cevap.ok && new URL(olay.request.url).origin === self.location.origin) {
           const kopya = cevap.clone();
