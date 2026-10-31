@@ -1578,7 +1578,7 @@ button.imza-kart {
 }
 
 .acilis .imza {
-  width: min(44vw, 170px);
+  width: min(62vw, 240px);
   color: #ffffff;
 }
 
@@ -1588,7 +1588,27 @@ button.imza-kart {
   font-weight: 600;
   letter-spacing: 0.04em;
   opacity: 0;
-  animation: a-dikis 0.35s ease 2.25s forwards;
+  animation: a-dikis 0.35s ease 3s forwards;
+}
+
+.a-sahne {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.a-sahne-logo {
+  animation: a-son 0.3s ease 1.95s forwards;
+}
+
+@keyframes a-son {
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes a-yuksel {
@@ -1616,8 +1636,15 @@ button.imza-kart {
     animation: none;
   }
 
-  .a-dikis,
-  .a-ad {
+  .a-sahne-logo {
+    animation: none;
+  }
+
+  .a-sahne-imza {
+    display: none;
+  }
+
+  .a-dikis {
     opacity: 0.8;
     animation: none;
   }

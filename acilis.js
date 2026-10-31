@@ -1,10 +1,10 @@
-// Açılış: logo parça parça kurulur, imza yazılır, sonra uygulama açılır. Dokununca hemen geçilir.
+// Açılış: önce logo parça parça kurulup kaybolur, sonra imza tek başına yazılır. Dokununca hemen geçilir.
 
 import { IMZA } from './imza.js';
 
-const SURE = 3000;
+const SURE = 3900;
 const KISA_SURE = 900;
-const IMZA_BAS = 1.6;
+const IMZA_BAS = 2.35;
 const IMZA_HIZ = 0.3;
 
 const LOGO = `<svg class="a-logo" viewBox="0 0 320 300" aria-hidden="true">
@@ -39,7 +39,7 @@ export function acilisGoster() {
   perde.className = 'acilis';
   perde.setAttribute('role', 'img');
   perde.setAttribute('aria-label', 'Cüzdan, Mehmetnur Özkoç');
-  perde.innerHTML = `${LOGO}${imzaYolu()}<p class="a-ad">Mehmetnur Özkoç</p>`;
+  perde.innerHTML = `<div class="a-sahne a-sahne-logo">${LOGO}</div><div class="a-sahne a-sahne-imza">${imzaYolu()}<p class="a-ad">Mehmetnur Özkoç</p></div>`;
 
   const sade = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let bitti = false;
