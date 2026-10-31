@@ -566,7 +566,7 @@ const ornekDonem = { baslangic: '2026-11-15', bitis: '2026-12-14', sonraki: '202
 test('hatırlatma: tek ve net metin, önceden ve son gün', async () => {
   const { bildirimPlani, gelenler } = await import('../bildirim.js');
   const veri = ornekVeri();
-  const plan = bildirimPlani(veri, ornekDonem, veri.donemler['2026-11-15'], '2026-11-16', { gunOnce: 1, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' });
+  const plan = bildirimPlani(veri, ornekDonem, veri.donemler['2026-11-15'], '2026-11-16', { gunOnce: 1, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' }).filter((k) => k.anahtar.includes('2026-11'));
   assert.deepEqual(plan.map((k) => k.anahtar), ['f:f1:2026-11:once', 'f:f1:2026-11:gun']);
   assert.equal(plan[0].metin, 'Yarın son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
   assert.equal(plan[1].metin, 'Bugün son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
@@ -582,15 +582,15 @@ test('hatırlatma: ödenince durur, günü kaçırılırsa açılışta söyler,
   const ayar = { gunOnce: 3, saat: '09:00', maas: false, gunSonu: false, gunSonuSaat: '21:00' };
   const veri = ornekVeri();
   const kayit = veri.donemler['2026-11-15'];
-  const gecikmis = bildirimPlani(veri, ornekDonem, kayit, '2026-11-19', ayar);
+  const gecikmis = bildirimPlani(veri, ornekDonem, kayit, '2026-11-19', ayar).filter((k) => k.anahtar.includes('2026-11'));
   assert.equal(gecikmis[0].metin, 'Yarın son gün: 850,00 TL. Ödenince kalan: 4.150,00 TL.');
-  const geciken = bildirimPlani(veri, ornekDonem, kayit, '2026-11-25', ayar);
+  const geciken = bildirimPlani(veri, ornekDonem, kayit, '2026-11-25', ayar).filter((k) => k.anahtar.includes('2026-11'));
   assert.deepEqual(geciken.map((k) => k.anahtar), ['f:f1:2026-11:gun']);
   assert.match(geciken[0].metin, /^Gecikti/);
 
   const odenmis = ornekVeri();
   odenmis.donemler['2026-11-15'].hareketler = [{ tur: 'fatura', faturaId: 'f1', ay: '2026-11', ad: 'Elektrik', kurus: 85000, tarih: '2026-11-18' }];
-  assert.deepEqual(bildirimPlani(odenmis, ornekDonem, odenmis.donemler['2026-11-15'], '2026-11-19', ayar), []);
+  assert.deepEqual(bildirimPlani(odenmis, ornekDonem, odenmis.donemler['2026-11-15'], '2026-11-19', ayar).filter((k) => k.anahtar.includes('2026-11')), []);
 });
 
 test('hatırlatma: tutarı belli olmayan fatura, maaş, gün sonu, para sınırı', async () => {
@@ -693,7 +693,7 @@ test('abonelik üç ayda bir sorulur, köşedeki para serbest parayı azaltır',
   const veri = ornekVeri({ faturalar: [{ id: 'a', ad: 'Dizi', tur: 'sabit', gun: 20, ilkAy: '2026-08', kurus: 10000, cesit: 'abonelik' }] });
   veri.donemler['2026-11-15'].hareketler = ['2026-08', '2026-09', '2026-10', '2026-11'].map((ay) => ({ tur: 'fatura', faturaId: 'a', ay, ad: 'Dizi', kurus: 10000, tarih: '2026-11-15' }));
   const kayit = veri.donemler['2026-11-15'];
-  assert.deepEqual(bildirimPlani(veri, ornekDonem, kayit, '2026-11-16', ayar).map((k) => k.anahtar), ['abonelik:a:2026-11']);
+  assert.deepEqual(bildirimPlani(veri, ornekDonem, kayit, '2026-11-16', ayar).filter((k) => k.anahtar.startsWith('abonelik')).map((k) => k.anahtar), ['abonelik:a:2026-11']);
   assert.deepEqual(bildirimPlani(veri, ornekDonem, kayit, '2026-12-16', ayar).filter((k) => k.anahtar.startsWith('abonelik')), []);
   const kose = bildirimPlani({ ...veri, kose: 495000 }, ornekDonem, kayit, '2026-11-16', { ...ayar, altSinir: 1000 });
   assert.ok(kose.some((k) => k.anahtar.startsWith('para:')));

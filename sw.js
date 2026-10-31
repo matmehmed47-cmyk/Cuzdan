@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-12';
+const SURUM = 'cuzdan-13';
 const BILDIRIM = 'cuzdan-bildirim';
 const EN_ESKI = 2 * 24 * 60 * 60 * 1000;
 const DOSYALAR = [
@@ -18,6 +18,7 @@ const DOSYALAR = [
   './bildirim.js',
   './takvim.js',
   './ses.js',
+  './bulut.js',
   './manifest.webmanifest',
   './ikon/ikon-180.png',
   './ikon/ikon-192.png',
@@ -72,6 +73,22 @@ async function hatirlat() {
     await onbellek.put('bildirim-gosterilen', new Response(JSON.stringify([...gosterilen, ...gelen.map((k) => k.anahtar)].slice(-300))));
   }
 }
+
+async function gosterildi(anahtar) {
+  const onbellek = await caches.open(BILDIRIM);
+  const gosterilen = await jsonOku(onbellek, 'bildirim-gosterilen');
+  await onbellek.put('bildirim-gosterilen', new Response(JSON.stringify([...gosterilen, anahtar].slice(-300))));
+}
+
+self.addEventListener('push', (olay) => {
+  const kalem = olay.data?.json();
+  if (!kalem) return;
+  olay.waitUntil(
+    self.registration
+      .showNotification(kalem.baslik, { body: kalem.metin, tag: kalem.anahtar, icon: 'ikon/ikon-192.png' })
+      .then(() => gosterildi(kalem.anahtar)),
+  );
+});
 
 self.addEventListener('periodicsync', (olay) => {
   if (olay.tag === 'cuzdan-hatirlat') olay.waitUntil(hatirlat());

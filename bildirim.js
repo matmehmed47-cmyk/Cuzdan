@@ -6,7 +6,7 @@ import { kalanPara, paraYaz } from './para.js';
 import { donemTaksitleri } from './taksit.js';
 
 export const VARSAYILAN_AYAR = { gunOnce: 3, saat: '09:00', maas: true, gunSonu: false, gunSonuSaat: '21:00' };
-const ILERI_GUN = 14;
+const ILERI_GUN = 35;
 const ABONELIK_AY = 3;
 const GUN_SONU_ILERI = 3;
 const ANAHTAR = 'cuzdan.bildirim';

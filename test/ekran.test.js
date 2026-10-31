@@ -76,7 +76,7 @@ test('kayıt varsa ana ekran açılır ve ad değiştirilebilir', async () => {
   [...document.querySelectorAll('button')].find((d) => d.textContent === 'Ana sayfa').click();
   document.querySelector('[aria-label="Ayarlar"]').click();
   assert.match(metin(window), /Normal maaş günü: ayın 15/);
-  assert.match(metin(window), /Hesap sistemi henüz bağlı değil/);
+  assert.match(metin(window), /Hesap açarsan veriler telefon değişince kaybolmaz/);
 
   [...document.querySelectorAll('button')].find((d) => d.textContent.startsWith('Adını')).click();
   document.getElementById('ad').value = 'Yeni Ad';
@@ -789,4 +789,133 @@ test('N bölümü: takvim, hedef, köşe, kredi kartı, sesli giriş, geçmiş g
 
   dugme('Geçmiş dönemler').click();
   assert.match(metin(window), /Dönem dönem giden para/);
+});
+
+function sahteSunucu(kayit = null) {
+  const durum = { kayit, yazma: 0, plan: null };
+  const cevap = (govde, ok = true) => ({ ok, status: ok ? 200 : 400, text: async () => JSON.stringify(govde) });
+  durum.fetch = async (adres, ayar = {}) => {
+    if (typeof adres === 'string' && !adres.includes('supabase.co')) return fiyatCevabi(adres);
+    if (adres.includes('/auth/v1/signup') || adres.includes('/auth/v1/token')) {
+      const govde = JSON.parse(ayar.body);
+      if (govde.password === 'yanlis-sifre') return cevap({ error_code: 'invalid_credentials' }, false);
+      return cevap({ access_token: 'a', refresh_token: 'b', expires_in: 3600, user: { id: 'u1', email: govde.email } });
+    }
+    if (adres.includes('/auth/v1/logout')) return cevap(null);
+    if (adres.includes('rpc/cuzdan_kaydet')) {
+      const { yeni, beklenen } = JSON.parse(ayar.body);
+      if ((durum.kayit?.surum ?? 0) !== beklenen) return cevap(-1);
+      durum.kayit = { veri: yeni, surum: beklenen + 1 };
+      durum.yazma += 1;
+      return cevap(durum.kayit.surum);
+    }
+    if (adres.includes('rpc/hesabimi_sil')) {
+      durum.kayit = null;
+      return cevap(null);
+    }
+    if (adres.includes('/rest/v1/cuzdanlar')) return cevap(durum.kayit ? [durum.kayit] : []);
+    if (adres.includes('bildirim_planlari')) {
+      if (ayar.method === 'POST') durum.plan = JSON.parse(ayar.body).plan;
+      return cevap(ayar.method === 'POST' ? null : []);
+    }
+    return cevap([]);
+  };
+  return durum;
+}
+
+const bekle = (ms = 30) => new Promise((bitti) => setTimeout(bitti, ms));
+
+test('hesap: açılır, mevcut veri yüklenir, değişiklik gider, çıkışta cihaz temizlenir', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const sunucu = sahteSunucu();
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100000 } } }), (w) => {
+    w.fetch = sunucu.fetch;
+  });
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  dugme('Hesap aç').click();
+  document.getElementById('eposta').value = 'yok';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /E-posta adresini yaz/);
+  document.getElementById('eposta').value = 'a@b.com';
+  document.getElementById('sifre').value = 'kisa';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /en az 8 karakter/);
+  document.getElementById('sifre').value = 'uzun-sifre-1';
+  gonder(window, document.querySelector('form'));
+  await bekle();
+  assert.equal(sunucu.kayit.surum, 1);
+  assert.equal(sunucu.kayit.veri.ad, 'Ev');
+  assert.match(metin(window), /a@b\.com ile giriş yapıldı/);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.ok(JSON.parse(window.localStorage.getItem('cuzdan.esitleme')).surum === 1);
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  dugme('Çıkış yap').click();
+  await bekle();
+  assert.equal(window.localStorage.getItem('cuzdan.v1'), null);
+  assert.equal(window.localStorage.getItem('cuzdan.oturum'), null);
+  assert.match(metin(window), /Adım 1/);
+
+  dugme('Hesabım var, giriş yap').click();
+  document.getElementById('eposta').value = 'a@b.com';
+  document.getElementById('sifre').value = 'yanlis-sifre';
+  gonder(window, document.querySelector('form'));
+  await bekle();
+  assert.match(metin(window), /E-posta ya da şifre yanlış/);
+  document.getElementById('sifre').value = 'uzun-sifre-1';
+  dugme('Giriş yap').disabled = false;
+  gonder(window, document.querySelector('form'));
+  await bekle();
+  assert.equal(document.getElementById('ana-para').textContent, '1.000,00 TL');
+});
+
+test('hesap: iki farklı kayıt varsa kullanıcı seçer, sessizce silinmez', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const uzak = { surum: 1, ad: 'Hesaptaki', ayar, donemler: { [baslangic]: { para: 500000 } } };
+  const sunucu = sahteSunucu({ veri: uzak, surum: 3 });
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Cihaz', ayar, donemler: { [baslangic]: { para: 100000 } } }), (w) => {
+    w.fetch = sunucu.fetch;
+  });
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  dugme('Giriş yap').click();
+  document.getElementById('eposta').value = 'a@b.com';
+  document.getElementById('sifre').value = 'uzun-sifre-1';
+  gonder(window, document.querySelector('form'));
+  await bekle();
+  assert.match(metin(window), /İki farklı kayıt var/);
+  assert.match(metin(window), /Hesaptaki/);
+  assert.match(metin(window), /Cihaz/);
+  assert.equal(sunucu.yazma, 0);
+
+  dugme('Bu cihazdakini kullan').click();
+  await bekle();
+  assert.equal(sunucu.kayit.surum, 4);
+  assert.equal(sunucu.kayit.veri.ad, 'Cihaz');
+  assert.equal(document.getElementById('ana-para').textContent, '1.000,00 TL');
+});
+
+test('hesap: başka cihazdaki yeni kayıt açılışta gelir, internet yokken kayıt bekler', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const yerel = { surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100000 } } };
+  const sunucu = sahteSunucu({ veri: { ...yerel, donemler: { [baslangic]: { para: 700000 } } }, surum: 5 });
+  const window = await uygulamaAc(JSON.stringify(yerel), (w) => {
+    w.fetch = sunucu.fetch;
+    w.localStorage.setItem('cuzdan.oturum', JSON.stringify({ erisim: 'a', yenileme: 'b', bitis: Date.now() + 3600000, id: 'u1', eposta: 'a@b.com' }));
+    w.localStorage.setItem('cuzdan.esitleme', JSON.stringify({ surum: 4, kirli: false }));
+  });
+  await bekle();
+  const { document } = window;
+  assert.equal(document.getElementById('ana-para').textContent, '7.000,00 TL');
+  assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.esitleme')).surum, 5);
+  assert.match(metin(window), /Hesabına kaydediliyor/);
 });

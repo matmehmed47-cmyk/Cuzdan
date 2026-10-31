@@ -9,7 +9,26 @@ import {
   maasGunuDegistir,
   maasKaydir,
 } from './donem.js';
-import { kaydet, temizle, yedekCoz, yukle } from './depo.js';
+import { kaydet, temizle, veriGecerliMi, yedekCoz, yukle } from './depo.js';
+import {
+  BulutHatasi,
+  VAPID_ACIK,
+  abonelikKaydet,
+  baglantiOturumu,
+  cikisYap,
+  esitlemeDurumu,
+  esitlemeYaz,
+  girisYap,
+  gonderilenleriOku,
+  hesapSil,
+  kayitOl,
+  oturum,
+  planGonder,
+  sifreBaglantisi,
+  sifreDegistir,
+  uzagaYaz,
+  uzaktanOku,
+} from './bulut.js';
 import {
   atlamaGeriAl,
   ayAtla,
@@ -135,6 +154,8 @@ let piyasaHata = false;
 let piyasaYukleniyor = false;
 let sonElleYenileme = 0;
 let canliEkran = null;
+let esitlemeSayaci = null;
+let esitleniyor = false;
 
 function el(etiket, ozellikler = {}, ...cocuklar) {
   const dugum = document.createElement(etiket);
@@ -198,6 +219,7 @@ function kaydetVeUyar(yeni) {
   veri = yeni;
   uyari = kaydet(veri) ? '' : 'Kayıt yapılamadı. Telefonda yer dolu olabilir, yedeğini indir.';
   planYaz();
+  esitleIste();
 }
 
 function hataSatiri() {
@@ -284,6 +306,7 @@ function kurulumEkrani() {
       el('input', { id: 'ad', name: 'ad', maxLength: 30, placeholder: 'Örnek: Ev Bütçesi', value: kurulumTaslak.ad, autocomplete: 'off' }),
       hata,
       el('button', { type: 'submit' }, 'Devam'),
+      el('button', { type: 'button', sinif: 'ikincil', onclick: () => girisEkrani('giris', kurulumEkrani) }, 'Hesabım var, giriş yap'),
     );
     return goster(baslik, form);
   }
@@ -475,7 +498,7 @@ function anaEkran() {
         ),
       ),
     ),
-    el('p', { sinif: 'ipucu orta bosluk' }, 'Veriler şimdilik sadece bu cihazda duruyor.'),
+    el('p', { sinif: 'ipucu orta bosluk' }, oturum() ? `Hesabına kaydediliyor · ${oturum().eposta}` : 'Veriler sadece bu cihazda. Ayarlar bölümünden hesap açabilirsin.'),
   );
   canliEkran = anaEkran;
 }
@@ -2264,24 +2287,30 @@ function hatirlatmaKartlari(donem, kayit, bugun) {
   ));
 }
 
-function planYaz() {
-  if (!veri?.bildirim?.telefon || !window.caches) return;
+function guncelPlan() {
+  if (!veri?.bildirim?.telefon) return null;
   const bugun = bugunTR();
   const donem = donemBul(veri.ayar, bugun);
   const kayit = veri.donemler[donem.baslangic];
-  if (!kayit) return;
+  if (!kayit) return null;
   const gosterilen = gosterilenYukle();
-  const plan = bildirimPlani(veri, donem, kayit, bugun).filter((k) => !gosterilen.includes(k.anahtar));
+  return bildirimPlani(veri, donem, kayit, bugun).filter((k) => !gosterilen.includes(k.anahtar));
+}
+
+function planYaz() {
+  const plan = guncelPlan();
+  if (!plan || !window.caches) return;
   window.caches.open('cuzdan-bildirim').then((o) => o.put('bildirim-plan', new Response(JSON.stringify(plan)))).catch(() => {});
 }
 
 // Telefonda gösterilen hatırlatma, uygulama açılınca bir daha kart olarak çıkmasın.
 async function gosterilenleriAl() {
-  if (!window.caches) return;
   try {
-    const cevap = await (await window.caches.open('cuzdan-bildirim')).match('bildirim-gosterilen');
-    if (!cevap) return;
-    gosterilenKaydet([...gosterilenYukle(), ...(await cevap.json())]);
+    const cevap = await (await window.caches?.open('cuzdan-bildirim'))?.match('bildirim-gosterilen');
+    const yerel = cevap ? await cevap.json() : [];
+    const uzak = oturum() && veri?.bildirim?.telefon ? await gonderilenleriOku() : [];
+    if (!yerel.length && !uzak.length) return;
+    gosterilenKaydet([...gosterilenYukle(), ...yerel, ...uzak]);
     canliTazele();
   } catch {
     // Okunamazsa kart görünür, zararı yok.
@@ -2295,6 +2324,16 @@ async function arkaPlanKaydi() {
   } catch {
     // Telefon izin vermezse hatırlatmalar uygulama açılınca görünür.
   }
+}
+
+async function telefonAbonesi() {
+  if (!oturum() || !('serviceWorker' in navigator)) return false;
+  const kayit = await navigator.serviceWorker.ready;
+  if (!kayit.pushManager) return false;
+  const anahtar = Uint8Array.from(atob(VAPID_ACIK.replaceAll('-', '+').replaceAll('_', '/')), (h) => h.charCodeAt(0));
+  const abonelik = (await kayit.pushManager.getSubscription()) ?? (await kayit.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: anahtar }));
+  await abonelikKaydet(abonelik);
+  return true;
 }
 
 function hatirlatmaEkrani() {
@@ -2316,8 +2355,9 @@ function hatirlatmaEkrani() {
     if (!destek) return iphone ? 'iPhone’da önce uygulamayı ana ekrana eklemelisin.' : 'Bu cihaz telefon bildirimini desteklemiyor.';
     if (window.Notification.permission === 'denied') return 'Bildirim izni kapalı. Telefonun ayarlarından açabilirsin.';
     if (!ayar.telefon) return 'Telefon bildirimi kapalı.';
+    if (oturum()) return 'Açık. Uygulama kapalıyken de seçtiğin saatte gelir, birkaç dakika sapabilir.';
     return arkaPlan
-      ? 'Açık. Uygulama kapalıyken de denenir, saati telefon belirler ve gecikebilir.'
+      ? 'Açık. Tam saatinde gelmesi için hesap aç; şimdilik saati telefon belirler.'
       : 'Açık. Bu cihaz kapalı uygulamadan bildirim çalıştıramıyor; hatırlatma açınca görünür.';
   }
 
@@ -2328,6 +2368,7 @@ function hatirlatmaEkrani() {
     }
     kaydetVeUyar({ ...veri, bildirim: { ...ayar, telefon: true } });
     await arkaPlanKaydi();
+    await telefonAbonesi().catch(() => {});
     hatirlatmaEkrani();
   }
 
@@ -2400,6 +2441,237 @@ function hatirlatmaEkrani() {
   );
 }
 
+/* Hesap */
+
+function epostaAlani() {
+  return [
+    el('label', { htmlFor: 'eposta' }, 'E-posta'),
+    el('input', { id: 'eposta', name: 'eposta', type: 'email', autocomplete: 'email', inputMode: 'email' }),
+  ];
+}
+
+function hataMetni(hata) {
+  return hata instanceof BulutHatasi ? hata.message : 'İşlem yapılamadı, yeniden dene.';
+}
+
+function girisEkrani(mod, geri) {
+  const yeni = mod === 'kayit';
+  const hata = hataSatiri();
+  const gonderDugme = el('button', { type: 'submit' }, yeni ? 'Hesap aç' : 'Giriş yap');
+  const form = el(
+    'form',
+    {
+      onsubmit: async (o) => {
+        o.preventDefault();
+        const eposta = form.elements.eposta.value.trim();
+        const sifre = form.elements.sifre.value;
+        if (!eposta.includes('@')) return hataGoster(hata, 'E-posta adresini yaz.');
+        if (sifre.length < 8) return hataGoster(hata, 'Şifre en az 8 karakter olmalı.');
+        gonderDugme.disabled = true;
+        try {
+          await (yeni ? kayitOl(eposta, sifre) : girisYap(eposta, sifre));
+          await girisSonrasi();
+        } catch (h) {
+          gonderDugme.disabled = false;
+          hataGoster(hata, hataMetni(h));
+        }
+      },
+    },
+    epostaAlani(),
+    el('label', { htmlFor: 'sifre' }, 'Şifre'),
+    el('input', { id: 'sifre', name: 'sifre', type: 'password', autocomplete: yeni ? 'new-password' : 'current-password' }),
+    yeni ? el('p', { sinif: 'ipucu' }, 'En az 8 karakter. Bilgilerin hesabına kaydedilir, başka kullanıcılar göremez.') : null,
+    hata,
+    gonderDugme,
+    el('button', { type: 'button', sinif: 'ikincil', onclick: () => girisEkrani(yeni ? 'giris' : 'kayit', geri) }, yeni ? 'Hesabım var, giriş yap' : 'Yeni hesap aç'),
+    yeni ? null : el('button', { type: 'button', sinif: 'ikincil', onclick: () => sifreUnuttumEkrani(geri) }, 'Şifremi unuttum'),
+  );
+  goster(ustBolum(yeni ? 'Hesap aç' : 'Giriş yap', geri), form);
+}
+
+function sifreUnuttumEkrani(geri) {
+  const hata = hataSatiri();
+  const form = el(
+    'form',
+    {
+      onsubmit: async (o) => {
+        o.preventDefault();
+        const eposta = form.elements.eposta.value.trim();
+        if (!eposta.includes('@')) return hataGoster(hata, 'E-posta adresini yaz.');
+        try {
+          await sifreBaglantisi(eposta);
+          goster(ustBolum('Şifremi unuttum', geri), el('section', { sinif: 'kart' }, el('p', {}, 'E-postana bağlantı gönderdik. Gelmezse gereksiz kutusuna da bak.')));
+        } catch (h) {
+          hataGoster(hata, hataMetni(h));
+        }
+      },
+    },
+    epostaAlani(),
+    hata,
+    el('button', { type: 'submit' }, 'Bağlantı gönder'),
+  );
+  goster(ustBolum('Şifremi unuttum', () => girisEkrani('giris', geri)), form);
+}
+
+function yeniSifreEkrani(erisim, yenileme) {
+  const hata = hataSatiri();
+  const form = el(
+    'form',
+    {
+      onsubmit: async (o) => {
+        o.preventDefault();
+        const sifre = form.elements.sifre.value;
+        if (sifre.length < 8) return hataGoster(hata, 'Şifre en az 8 karakter olmalı.');
+        try {
+          await sifreDegistir(sifre, erisim);
+          await baglantiOturumu(erisim, yenileme);
+          await girisSonrasi();
+        } catch (h) {
+          hataGoster(hata, hataMetni(h));
+        }
+      },
+    },
+    el('label', { htmlFor: 'sifre' }, 'Yeni şifre'),
+    el('input', { id: 'sifre', name: 'sifre', type: 'password', autocomplete: 'new-password' }),
+    hata,
+    el('button', { type: 'submit' }, 'Kaydet'),
+  );
+  goster(el('header', { sinif: 'ust' }, el('h1', {}, 'Yeni şifre')), form);
+}
+
+function veriOzeti(kayit) {
+  const hareket = Object.values(kayit.donemler).reduce((t, d) => t + (d.hareketler?.length ?? 0), 0);
+  const son = Object.values(kayit.donemler).flatMap((d) => d.hareketler ?? []).map((h) => h.tarih).sort().at(-1);
+  return `${kayit.ad}: ${hareket} kayıt${son ? `, son kayıt ${tarihYaz(son)}` : ''}`;
+}
+
+function uzaktanAl(uzak) {
+  veri = uzak.veri;
+  kaydet(veri);
+  esitlemeYaz({ surum: uzak.surum, kirli: false });
+  planYaz();
+}
+
+async function girisSonrasi() {
+  const uzak = await uzaktanOku();
+  if (!uzak) {
+    esitlemeYaz({ surum: 0, kirli: Boolean(veri) });
+    if (!veri) return kurulumEkrani();
+    await esitle();
+    return ayarlarEkrani();
+  }
+  if (!veriGecerliMi(uzak.veri)) throw new BulutHatasi('Hesaptaki kayıt okunamadı.', 'veri');
+  if (!veri || JSON.stringify(veri) === JSON.stringify(uzak.veri)) {
+    uzaktanAl(uzak);
+    return anaEkran();
+  }
+  cakismaEkrani(uzak);
+}
+
+// İki farklı kayıt varsa hangisinin kalacağına kullanıcı karar verir; sessizce silinmez.
+function cakismaEkrani(uzak) {
+  const hata = hataSatiri();
+  goster(
+    el('header', { sinif: 'ust' }, el('h1', {}, 'İki farklı kayıt var')),
+    el('section', { sinif: 'kart' }, el('p', {}, 'Bu cihazdaki kayıt ile hesabındaki kayıt farklı. Hangisi kalsın?')),
+    el(
+      'div',
+      { sinif: 'izgara' },
+      el('div', { sinif: 'kart' }, el('h2', {}, 'Bu cihaz'), el('p', { sinif: 'ipucu' }, veriOzeti(veri))),
+      el('div', { sinif: 'kart' }, el('h2', {}, 'Hesabım'), el('p', { sinif: 'ipucu' }, veriOzeti(uzak.veri))),
+    ),
+    hata,
+    el('button', { type: 'button', sinif: 'ikincil', onclick: yedekIndir }, 'Önce bu cihazın yedeğini indir'),
+    el('button', {
+      type: 'button',
+      onclick: () => {
+        uzaktanAl(uzak);
+        anaEkran();
+      },
+    }, 'Hesabımdakini kullan'),
+    el('button', {
+      type: 'button',
+      sinif: 'ikincil',
+      onclick: async () => {
+        esitlemeYaz({ surum: uzak.surum, kirli: true });
+        await esitle();
+        if (esitlemeDurumu().kirli) return hataGoster(hata, 'Kaydedilemedi, internetini kontrol et.');
+        anaEkran();
+      },
+    }, 'Bu cihazdakini kullan'),
+  );
+}
+
+function esitleIste() {
+  if (!oturum()) return;
+  esitlemeYaz({ ...esitlemeDurumu(), kirli: true });
+  clearTimeout(esitlemeSayaci);
+  esitlemeSayaci = setTimeout(esitle, 1500);
+  esitlemeSayaci.unref?.();
+}
+
+async function esitle() {
+  if (!window.fetch || !oturum() || !veri || esitleniyor) return;
+  esitleniyor = true;
+  try {
+    const durum = esitlemeDurumu();
+    if (durum.kirli) {
+      const gonderilen = veri;
+      const surum = await uzagaYaz(gonderilen, durum.surum);
+      if (surum === -1) {
+        const uzak = await uzaktanOku();
+        if (uzak) return cakismaEkrani(uzak);
+        esitlemeYaz({ surum: 0, kirli: true });
+        return;
+      }
+      esitlemeYaz({ surum, kirli: veri !== gonderilen });
+      if (veri !== gonderilen) esitleIste();
+    } else {
+      const uzak = await uzaktanOku();
+      if (uzak && uzak.surum > durum.surum && veriGecerliMi(uzak.veri)) {
+        uzaktanAl(uzak);
+        canliTazele();
+      }
+    }
+    const plan = guncelPlan();
+    if (plan) await planGonder(plan);
+  } catch {
+    // İnternet yoksa kayıt cihazda bekler, bağlantı gelince gönderilir.
+  } finally {
+    esitleniyor = false;
+  }
+}
+
+async function cikisEkrani() {
+  await esitle();
+  if (esitlemeDurumu().kirli) {
+    uyari = 'Son değişiklikler henüz hesabına gitmedi. İnternete bağlanıp yeniden dene.';
+    return ayarlarEkrani();
+  }
+  if (!window.confirm('Çıkış yapılsın mı? Veriler hesabında kalır, bu cihazdan kaldırılır.')) return;
+  await cikisYap();
+  temizle();
+  veri = null;
+  kurulumTaslak = { adim: 1, ad: '', gun: null };
+  kurulumEkrani();
+}
+
+async function hesabiSil() {
+  if (!window.confirm('Hesabın ve hesaptaki tüm veriler silinecek. Önce yedek almanı öneririm. Emin misin?')) return;
+  if (!window.confirm('Son onay: Silinen hesap geri gelmez.')) return;
+  try {
+    await hesapSil();
+  } catch (h) {
+    uyari = hataMetni(h);
+    return ayarlarEkrani();
+  }
+  temizle();
+  veri = null;
+  uyari = '';
+  kurulumTaslak = { adim: 1, ad: '', gun: null };
+  kurulumEkrani();
+}
+
 /* Ayarlar */
 
 function ayarlarEkrani() {
@@ -2461,8 +2733,18 @@ function ayarlarEkrani() {
       'section',
       { sinif: 'kart' },
       el('h2', {}, 'Hesap'),
-      el('p', { sinif: 'ipucu' }, 'Hesap sistemi henüz bağlı değil. Silme işlemi sadece bu cihazdaki verileri siler.'),
-      el('button', { type: 'button', sinif: 'tehlike', onclick: verileriSil }, 'Bu cihazdaki verileri sil'),
+      oturum()
+        ? [
+            el('p', { sinif: 'ipucu' }, `${oturum().eposta} ile giriş yapıldı. Veriler hesabına kaydediliyor.`),
+            el('button', { type: 'button', sinif: 'ikincil', onclick: cikisEkrani }, 'Çıkış yap'),
+            el('button', { type: 'button', sinif: 'tehlike', onclick: hesabiSil }, 'Hesabımı sil'),
+          ]
+        : [
+            el('p', { sinif: 'ipucu' }, 'Hesap açarsan veriler telefon değişince kaybolmaz, tablet ve telefonda aynı görünür.'),
+            el('button', { type: 'button', onclick: () => girisEkrani('kayit', ayarlarEkrani) }, 'Hesap aç'),
+            el('button', { type: 'button', sinif: 'ikincil', onclick: () => girisEkrani('giris', ayarlarEkrani) }, 'Giriş yap'),
+            el('button', { type: 'button', sinif: 'tehlike', onclick: verileriSil }, 'Bu cihazdaki verileri sil'),
+          ],
     ),
   );
 }
@@ -2626,6 +2908,14 @@ function baslat() {
   piyasaBaslat();
   planYaz();
   gosterilenleriAl();
+  esitle();
+  if (veri?.bildirim?.telefon && window.Notification?.permission === 'granted') telefonAbonesi().catch(() => {});
+
+  const baglanti = new URLSearchParams(window.location.hash.slice(1));
+  if (baglanti.get('type') === 'recovery' && baglanti.get('access_token')) {
+    window.history.replaceState?.(null, '', window.location.pathname);
+    return yeniSifreEkrani(baglanti.get('access_token'), baglanti.get('refresh_token'));
+  }
   return veri ? anaEkran() : kurulumEkrani();
 }
 
@@ -2637,9 +2927,12 @@ window.addEventListener('beforeinstallprompt', (olay) => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   gosterilenleriAl();
+  esitle();
   if (kok.querySelector('#ana-para')) anaEkran();
   if (Date.now() - (piyasaKaydi?.alindi ?? 0) > YENILEME_SURESI) piyasaYenile();
 });
+
+window.addEventListener('online', esitle);
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
