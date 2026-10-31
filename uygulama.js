@@ -629,6 +629,7 @@ function kalemKutusu(odeme, donem, bugun, geri, tamListe = false) {
           geri();
         },
       }, 'Bu ay yok'));
+      dugmeler.push(zilDugmesi(veri.faturalar.find((f) => f.id === odeme.faturaId), faturaGuncelle, geri));
     }
   } else if (odeme.durum === 'atlandi' || odeme.geriAlinabilir) {
     dugmeler.push(el('button', {

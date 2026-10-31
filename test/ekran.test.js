@@ -274,6 +274,7 @@ test('fatura eklenir, serbest para azalır, ödenince geri alınabilir', async (
   const eklenen = JSON.parse(window.localStorage.getItem('cuzdan.v1'));
   assert.equal(eklenen.faturalar.length, 1);
   assert.equal(eklenen.faturalar[0].kurus, 30000);
+  assert.equal(document.querySelectorAll('.zil').length, 2);
 
   dugme('✓ Ödedim').click();
   assert.match(metin(window), /✓ Ödendi/);
