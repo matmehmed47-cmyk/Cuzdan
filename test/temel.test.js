@@ -717,6 +717,7 @@ test('internetsiz çalışma: her uygulama dosyası önbellek listesinde', async
   for (const ad of readdirSync(kok).filter((d) => d.endsWith('.js') && d !== 'sw.js')) {
     assert.ok(sw.includes(`'./${ad}'`), ad);
   }
+  for (const ad of readdirSync(new URL('../ses/', import.meta.url))) assert.ok(sw.includes(`'./ses/${ad}'`), ad);
 });
 
 test('alacak-verecek: kalan, kısmi ödeme, para hareketi ve silme', async () => {

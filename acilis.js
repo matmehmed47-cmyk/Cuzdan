@@ -1,11 +1,13 @@
 // Açılış: önce logo parça parça kurulup kaybolur, sonra imza tek başına yazılır. Dokununca hemen geçilir.
 
 import { IMZA } from './imza.js';
+import { sesCal } from './sesler.js';
 
 const SURE = 3900;
 const KISA_SURE = 900;
 const IMZA_BAS = 2.35;
 const IMZA_HIZ = 0.3;
+const SES_ANI = 800;
 
 const LOGO = `<svg class="a-logo" viewBox="0 0 320 300" aria-hidden="true">
   <defs>
@@ -41,6 +43,14 @@ export function acilisGoster() {
   perde.setAttribute('aria-label', 'Cüzdan, Mehmetnur Özkoç');
   perde.innerHTML = `<div class="a-sahne a-sahne-logo">${LOGO}</div><div class="a-sahne a-sahne-imza">${imzaYolu()}<p class="a-ad">Mehmetnur Özkoç</p></div>`;
 
+  // Sikke cepten çıkarken çalar; tarayıcı izin vermezse ilk dokunuşta denenir.
+  let calindi = false;
+  const sesDene = async () => {
+    if (!calindi) calindi = await sesCal('acilis');
+  };
+  const sesSayaci = setTimeout(sesDene, SES_ANI);
+  sesSayaci.unref?.();
+
   const sade = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let bitti = false;
   const kapat = () => {
@@ -50,7 +60,10 @@ export function acilisGoster() {
     const sil = setTimeout(() => perde.remove(), 320);
     sil.unref?.();
   };
-  perde.addEventListener('click', kapat);
+  perde.addEventListener('click', () => {
+    sesDene();
+    kapat();
+  });
   const sayac = setTimeout(kapat, sade ? KISA_SURE : SURE);
   sayac.unref?.();
 }

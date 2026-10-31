@@ -1138,3 +1138,48 @@ test('açılış ekranı logo, imza ve adı gösterir, dokununca kapanır', asyn
   perde.click();
   assert.ok(perde.classList.contains('bitti'));
 });
+
+test('sesler: ayardan kapatılır, kapalıyken çalınmaz, ses sistemi yoksa uygulama bozulmaz', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const calan = [];
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100000 } } }), (w) => {
+    w.fetch = async (adres) => (String(adres).endsWith('.mp3') ? { arrayBuffer: async () => new ArrayBuffer(8) } : fiyatCevabi(adres));
+    w.AudioContext = class {
+      state = 'running';
+      destination = {};
+      decodeAudioData = async () => ({});
+      createBufferSource() {
+        return { connect() {}, start() { calan.push(1); } };
+      }
+    };
+  });
+  await new Promise((bitti) => setTimeout(bitti, 900));
+  assert.ok(calan.length >= 1);
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  assert.equal(document.getElementById('ses').checked, true);
+  document.getElementById('ses').click();
+  assert.equal(kayit().ses, false);
+
+  const onceki = calan.length;
+  document.querySelector('[aria-label="Geri"]').click();
+  dugme('Birikim').click();
+  dugme('+ Birikim ekle').click();
+  document.getElementById('miktar').value = '1';
+  document.getElementById('tutar').value = '100';
+  gonder(window, document.querySelector('form'));
+  await new Promise((bitti) => setTimeout(bitti, 20));
+  assert.equal(calan.length, onceki);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  dugme('Ana sayfa').click();
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  document.getElementById('ses').click();
+  await new Promise((bitti) => setTimeout(bitti, 20));
+  assert.equal(calan.length, onceki + 1);
+  assert.equal(kayit().ses, true);
+});

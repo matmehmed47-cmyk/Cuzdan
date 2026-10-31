@@ -109,6 +109,7 @@ import { kenardaPara, planAyir, planDurumu, planEkle, planKapat } from './plan.j
 import { defterDurumu, defterEkle, defterOde, defterOdemeSil, defterOzet, defterSil } from './defter.js';
 import { GRUPLAR, girenMi, gunlereAyir, hareketListesi, hareketToplamlari } from './hareket.js';
 import { acilisGoster } from './acilis.js';
+import { sesAyarla, sesCal } from './sesler.js';
 import { IMZA } from './imza.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
 import { konusmaCoz } from './ses.js';
@@ -819,6 +820,7 @@ function taksitOdeFormu(kalem, donem, geri) {
         if (kurus > kalan) return hataGoster(hata, `Kalan borç ${paraYaz(kalan)}. Daha fazlası yazılamaz.`);
         const onceki = veri;
         kaydetVeUyar(taksitOde(veri, donem.baslangic, kalem, kurus, bugunTR()));
+        if (kurus === kalan) sesCal('kazanc');
         geri();
         bandGoster(`${kalem.ad} ödendi`, onceki, geri);
       },
@@ -2039,6 +2041,7 @@ function birikimFormu(ilkTur = 'gram', geri = birikimlerEkrani) {
           return hataGoster(hata, eskiKutu.checked ? 'Tarih bugünden ileri olamaz.' : `Tarih ${tarihYaz(donem.baslangic)} ile bugün arasında olmalı.`);
         }
         kaydetVeUyar(birikimEkle(veri, eskiKutu.checked ? null : donem.baslangic, { id: birikimKimligi(), tur, miktar, kurus, tarih }));
+        sesCal('kazanc');
         birikimDetayi(tur);
       },
     },
@@ -2552,6 +2555,7 @@ function defterOdemeFormu(id) {
         if (kurus > kalan) return hataGoster(hata, `Kalan ${paraYaz(kalan)}. Daha fazlası yazılamaz.`);
         const donemVar = paraKutusu.checked && veri.donemler[donem.baslangic];
         kaydetVeUyar(defterOde(veri, id, { id: defterKimligi('o'), kurus, tarih: bugun }, donemVar ? donem.baslangic : null));
+        if (kurus === kalan) sesCal('kazanc');
         defterDetayi(id);
       },
     },
@@ -2654,6 +2658,7 @@ function planAyirFormu(id) {
         if (!kurus) return hataGoster(hata, 'Sıfırdan büyük bir tutar yaz. Örnek: 1.000');
         if (kurus > kalan) return hataGoster(hata, `Kalan ${paraYaz(kalan)}. Daha fazlası ayrılamaz.`);
         kaydetVeUyar(planAyir(veri, id, kurus));
+        if (kurus === kalan) sesCal('kazanc');
         planlarEkrani();
       },
     },
@@ -2956,6 +2961,7 @@ function uzaktanAl(uzak) {
 }
 
 async function girisSonrasi() {
+  sesCal('acilis');
   const uzak = await uzaktanOku();
   if (!uzak) {
     esitlemeYaz({ surum: 0, kirli: Boolean(veri) });
@@ -3144,6 +3150,22 @@ function ayarlarEkrani() {
         el('button', { type: 'button', sinif: 'ikincil', onclick: yedekIndir }, 'Yedeği indir'),
         el('label', { sinif: 'dosya' }, 'Yedekten yükle', el('input', { type: 'file', accept: 'application/json,.json', onchange: yedekYukle })),
       ),
+    ),
+    el(
+      'section',
+      { sinif: 'kart' },
+      el('h2', {}, 'Sesler'),
+      el('label', { sinif: 'secim', htmlFor: 'ses' }, el('input', {
+        id: 'ses',
+        type: 'checkbox',
+        checked: veri.ses !== false,
+        onchange: (o) => {
+          kaydetVeUyar({ ...veri, ses: o.target.checked });
+          sesAyarla(o.target.checked);
+          if (o.target.checked) sesCal('kazanc');
+        },
+      }), el('span', {}, 'Sikke seslerini çal')),
+      el('p', { sinif: 'ipucu' }, 'Açılışta, birikim eklerken ve bir borç, taksit ya da masraf tamamlanınca çalar. Telefon sessizdeyse duyulmaz.'),
     ),
     el(
       'section',
@@ -3390,5 +3412,6 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
-acilisGoster();
 baslat();
+sesAyarla(veri?.ses !== false);
+acilisGoster();
