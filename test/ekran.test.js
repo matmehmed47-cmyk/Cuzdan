@@ -1252,3 +1252,25 @@ test('tema yedekte doğrulanır, eski veriyle uygulama açılır', async () => {
   assert.equal(window.document.documentElement.dataset.theme, 'light');
   assert.ok(window.document.getElementById('ana-para'));
 });
+
+test('yükleme düğmesi: olay gelince çıkar, basınca yükleme penceresi açılır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100 } } }));
+  const { document } = window;
+  const dugme = document.querySelector('.kurulum-dugmesi');
+  assert.equal(dugme.hidden, true);
+
+  let acildi = 0;
+  const olay = new window.Event('beforeinstallprompt', { cancelable: true });
+  olay.prompt = async () => { acildi += 1; };
+  window.dispatchEvent(olay);
+  assert.equal(olay.defaultPrevented, false);
+  assert.equal(dugme.hidden, false);
+
+  dugme.click();
+  assert.equal(acildi, 1);
+  assert.equal(dugme.hidden, true);
+  window.dispatchEvent(new window.Event('appinstalled'));
+  assert.equal(dugme.hidden, true);
+});

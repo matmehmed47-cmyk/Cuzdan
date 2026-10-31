@@ -3334,7 +3334,7 @@ function ayarlarEkrani() {
       el(
         'div',
         { sinif: 'ikili' },
-        el('button', { type: 'button', sinif: 'ikincil', onclick: kurulumRehberi }, 'Ana ekrana ekle'),
+        uygulamaIcinde() ? null : el('button', { type: 'button', sinif: 'ikincil', onclick: kurulumRehberi }, 'Ana ekrana ekle'),
         el('button', { type: 'button', sinif: 'ikincil', onclick: () => hakkindaEkrani(ayarlarEkrani) }, 'Hakkında'),
       ),
     ),
@@ -3464,16 +3464,8 @@ function verileriSil() {
 function kurulumRehberi() {
   const iphone = /iPhone|iPad|iPod/.test(navigator.userAgent ?? '');
   const androidDugme = kurulumIstemi
-    ? el('button', {
-        type: 'button',
-        onclick: async () => {
-          kurulumIstemi.prompt();
-          await kurulumIstemi.userChoice;
-          kurulumIstemi = null;
-          kurulumRehberi();
-        },
-      }, 'Şimdi ekle')
-    : null;
+    ? el('button', { type: 'button', onclick: uygulamayiYukle }, 'Uygulamayı yükle')
+    : el('p', { sinif: 'ipucu' }, 'Yükleme hazır değil. Sayfayı kapatıp yeniden aç, olmazsa Chrome’u güncelle.');
 
   const iphoneKarti = el(
     'section',
@@ -3487,7 +3479,7 @@ function kurulumRehberi() {
     { sinif: 'kart' },
     el('h2', {}, 'Android'),
     androidDugme,
-    el('ol', {}, ['Bu sayfayı Chrome ile aç.', 'Sağ üstteki üç noktaya dokun.', '“Ana ekrana ekle” ya da “Uygulamayı yükle” seçeneğine dokun.'].map((s) => el('li', {}, s))),
+    el('ol', {}, ['Bu sayfayı Chrome ile aç.', 'Uygulamayı yükle düğmesine dokun.', 'Üç noktadaki menüyü kullanma, orada “zaten yüklü” yazabilir.'].map((s) => el('li', {}, s))),
   );
 
   goster(ustBolum('Ana ekrana ekle', ayarlarEkrani), iphone ? iphoneKarti : androidKarti, iphone ? androidKarti : iphoneKarti);
@@ -3528,9 +3520,38 @@ function baslat() {
   return veri ? anaEkran() : kurulumEkrani();
 }
 
+// Chrome 154-156'da üç nokta menüsü aynı sitedeki başka uygulama yüzünden "zaten yüklü" der; bu düğme o kontrolü atlar.
+const kurulumDugmesi = el('button', { type: 'button', sinif: 'kurulum-dugmesi', hidden: true, onclick: () => uygulamayiYukle() }, 'Uygulamayı yükle');
+document.body.append(kurulumDugmesi);
+
+function uygulamaIcinde() {
+  return window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function kurulumDugmesiYaz() {
+  kurulumDugmesi.hidden = !kurulumIstemi || uygulamaIcinde();
+}
+
+async function uygulamayiYukle() {
+  const istem = kurulumIstemi;
+  if (!istem) return kurulumRehberi();
+  kurulumIstemi = null;
+  kurulumDugmesiYaz();
+  try {
+    await istem.prompt();
+  } catch {
+    // Chrome olayı yeniden gönderince düğme geri gelir.
+  }
+}
+
 window.addEventListener('beforeinstallprompt', (olay) => {
-  olay.preventDefault();
   kurulumIstemi = olay;
+  kurulumDugmesiYaz();
+});
+
+window.addEventListener('appinstalled', () => {
+  kurulumIstemi = null;
+  kurulumDugmesiYaz();
 });
 
 document.addEventListener('visibilitychange', () => {
