@@ -78,7 +78,9 @@ test('yeni dönemde para sorulur, eski dönem kaydı silinmez', async () => {
   const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: eski }));
   const { document } = window;
 
-  assert.match(metin(window), /Yeni dönem başladı/);
+  assert.match(metin(window), /Yeni ay, temiz sayfa/);
+  assert.match(metin(window), /Geçen dönemden devreden: 5,00 TL/);
+  assert.equal(document.getElementById('para').value, '5,00 TL');
   document.getElementById('para').value = '1.000';
   gonder(window, document.querySelector('form'));
 
@@ -106,4 +108,43 @@ test('veri silme iki onayla kuruluma döner', async () => {
   assert.equal(onay, 2);
   assert.equal(window.localStorage.getItem('cuzdan.v1'), null);
   assert.match(metin(window), /Adım 1/);
+});
+
+test('harcama ve gelir parayı değiştirir, düzeltme geçmişi korur', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { '2000-01-15': { para: 500 }, [baslangic]: { para: 100000, hareketler: [] } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  dugme('+ Harcama').click();
+  document.getElementById('tutar').value = '0';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Sıfırdan büyük/);
+  document.getElementById('tutar').value = '100';
+  gonder(window, document.querySelector('form'));
+  assert.equal(document.getElementById('ana-para').textContent, '900,00 TL');
+
+  dugme('+ Gelir').click();
+  document.getElementById('tutar').value = '50,50';
+  gonder(window, document.querySelector('form'));
+  assert.equal(document.getElementById('ana-para').textContent, '950,50 TL');
+
+  dugme('Tutarı düzelt').click();
+  document.getElementById('para').value = '800';
+  gonder(window, document.querySelector('form'));
+  assert.equal(document.getElementById('ana-para').textContent, '800,00 TL');
+  const kayit = JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+  assert.equal(kayit.donemler[baslangic].hareketler.length, 2);
+
+  dugme('Geçmiş dönemler').click();
+  assert.match(metin(window), /2000 dönemi/);
+  assert.doesNotMatch(metin(window), /2026 dönemi/);
+});
+
+test('para eksiye düşerse açıkça yazar', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100, hareketler: [{ tur: 'harcama', kurus: 300, tarih: baslangic }] } } }));
+  assert.match(metin(window), /2,00 TL eksidesin/);
 });

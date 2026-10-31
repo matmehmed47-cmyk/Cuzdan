@@ -1,4 +1,4 @@
-import { paraCoz, paraYaz } from './para.js';
+import { hareketToplami, kalanPara, paraCoz, paraYaz, yaklasikAralik } from './para.js';
 import {
   bugunTR,
   donemBul,
@@ -140,7 +140,7 @@ function kurulumEkrani() {
           surum: 1,
           ad: kurulumTaslak.ad,
           ayar,
-          donemler: { [donem.baslangic]: { para } },
+          donemler: { [donem.baslangic]: { para, hareketler: [] } },
         });
         anaEkran();
       },
@@ -170,7 +170,14 @@ function bilgiSatiri() {
   return uyari ? el('p', { sinif: 'hata', role: 'alert' }, uyari) : null;
 }
 
+function oncekiDonem(baslangic) {
+  const tarih = Object.keys(veri.donemler).filter((t) => t < baslangic).sort().at(-1);
+  return tarih ? veri.donemler[tarih] : null;
+}
+
 function yeniDonemEkrani(donem) {
+  const onceki = oncekiDonem(donem.baslangic);
+  const devreden = onceki ? kalanPara(onceki) : null;
   const hata = hataSatiri();
   const form = el(
     'form',
@@ -179,16 +186,26 @@ function yeniDonemEkrani(donem) {
         o.preventDefault();
         const para = paraCoz(form.elements.para.value);
         if (para === null) return hataGoster(hata, 'Tutarı örnekteki gibi yaz: 25.000 ya da 1.250,50');
-        kaydetVeUyar({ ...veri, donemler: { ...veri.donemler, [donem.baslangic]: { para } } });
+        kaydetVeUyar({ ...veri, donemler: { ...veri.donemler, [donem.baslangic]: { para, hareketler: [] } } });
         anaEkran();
       },
     },
-    tutarAlani('para', 'Bu dönem elindeki parayı yaz'),
+    tutarAlani('para', 'Bu dönem elindeki parayı yaz', devreden > 0 ? paraYaz(devreden) : ''),
+    devreden === null ? null : el('p', { sinif: 'ipucu' }, `Geçen dönemden devreden: ${paraYaz(devreden)}. Maaşını da ekleyip yazabilirsin.`),
     el('p', { sinif: 'ipucu' }, `${tarihYaz(donem.baslangic)} – ${tarihYaz(donem.bitis)}`),
     hata,
     el('button', { type: 'submit' }, 'Kaydet'),
   );
-  goster(ustBolum(veri.ad), bilgiSatiri(), el('h2', {}, 'Yeni dönem başladı'), form);
+  goster(
+    ustBolum(veri.ad),
+    bilgiSatiri(),
+    el('section', { sinif: 'kart vurgulu' }, el('h2', {}, 'Yeni ay, temiz sayfa'), el('p', {}, 'Yeni dönem başladı. Geçen dönem Geçmiş bölümünde duruyor.')),
+    form,
+  );
+}
+
+function satir(etiket, deger) {
+  return el('p', { sinif: 'satir' }, el('span', {}, etiket), el('strong', {}, deger));
 }
 
 function anaEkran() {
@@ -198,25 +215,86 @@ function anaEkran() {
   if (!kayit) return yeniDonemEkrani(donem);
 
   const kalanGun = gunFarki(bugun, donem.sonraki);
+  const para = kalanPara(kayit);
+  const ayrilan = 0; // Faturalar ve taksitler eklenince hesaplanacak.
+  const serbest = para - ayrilan;
+  const [alt, ust] = yaklasikAralik(serbest);
   goster(
     ustBolum(veri.ad),
     bilgiSatiri(),
     el(
       'section',
       { sinif: 'kart vurgulu' },
-      el('p', { sinif: 'etiket' }, 'Param'),
-      el('p', { sinif: 'tutar', id: 'ana-para' }, paraYaz(kayit.para)),
+      el('p', { sinif: 'etiket' }, 'Serbest para'),
+      el('p', { sinif: 'tutar', id: 'ana-para' }, paraYaz(serbest)),
+      satir('Toplam para', paraYaz(para)),
+      satir('Faturalara ayrıldı', paraYaz(ayrilan)),
       el('button', { type: 'button', sinif: 'ikincil', onclick: () => paraDuzelt(donem, kayit) }, 'Tutarı düzelt'),
+    ),
+    el(
+      'div',
+      { sinif: 'ikili' },
+      el('button', { type: 'button', onclick: () => hareketEkrani('harcama', donem, kayit) }, '+ Harcama'),
+      el('button', { type: 'button', onclick: () => hareketEkrani('gelir', donem, kayit) }, '+ Gelir'),
     ),
     el(
       'section',
       { sinif: 'kart' },
-      el('p', { sinif: 'etiket' }, 'Bu dönem'),
-      el('p', {}, `${tarihYaz(donem.baslangic)} – ${tarihYaz(donem.bitis)}`),
+      el('p', { sinif: 'etiket' }, 'Maaşa kadar'),
+      el('p', {}, serbest < 0 ? `${paraYaz(-serbest)} eksidesin` : `Yaklaşık ${paraYaz(alt)} – ${paraYaz(ust)} kalıyor`),
       el('p', { sinif: 'ipucu' }, `Sonraki maaş: ${tarihYaz(donem.sonraki)} (${kalanGun} gün kaldı)`),
+      el('p', { sinif: 'ipucu' }, `Bu dönem: ${tarihYaz(donem.baslangic)} – ${tarihYaz(donem.bitis)}`),
     ),
-    el('p', { sinif: 'ipucu orta' }, 'Veriler şimdilik sadece bu cihazda duruyor.'),
+    el(
+      'section',
+      { sinif: 'kart' },
+      el('h2', {}, 'Yaklaşan ödemeler'),
+      el('p', { sinif: 'ipucu' }, 'Faturalar eklenince burada görünecek.'),
+    ),
+    el('button', { type: 'button', sinif: 'ikincil', onclick: gecmisEkrani }, 'Geçmiş dönemler'),
+    el('p', { sinif: 'ipucu orta bosluk' }, 'Veriler şimdilik sadece bu cihazda duruyor.'),
   );
+}
+
+function hareketEkrani(tur, donem, kayit) {
+  const baslik = tur === 'gelir' ? 'Gelir ekle' : 'Harcama ekle';
+  const hata = hataSatiri();
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const kurus = paraCoz(form.elements.tutar.value);
+        if (!kurus) return hataGoster(hata, 'Sıfırdan büyük bir tutar yaz. Örnek: 100 ya da 1.250,50');
+        const hareketler = [...(kayit.hareketler ?? []), { tur, kurus, tarih: bugunTR() }];
+        kaydetVeUyar({ ...veri, donemler: { ...veri.donemler, [donem.baslangic]: { ...kayit, hareketler } } });
+        anaEkran();
+      },
+    },
+    tutarAlani('tutar', 'Tutar'),
+    hata,
+    el('button', { type: 'submit' }, 'Kaydet'),
+  );
+  goster(ustBolum(baslik, anaEkran), form);
+}
+
+function gecmisEkrani() {
+  const guncel = donemBul(veri.ayar, bugunTR()).baslangic;
+  const tarihler = Object.keys(veri.donemler).filter((t) => t < guncel).sort().reverse();
+  const kartlar = tarihler.map((tarih) => {
+    const kayit = veri.donemler[tarih];
+    return el(
+      'section',
+      { sinif: 'kart' },
+      el('h2', {}, `${tarihYaz(tarih)} dönemi`),
+      satir('Başlangıç parası', paraYaz(kayit.para)),
+      satir('Gelir', paraYaz(hareketToplami(kayit, 'gelir'))),
+      satir('Harcama', paraYaz(hareketToplami(kayit, 'harcama'))),
+      satir('Dönem sonu', paraYaz(kalanPara(kayit))),
+    );
+  });
+  const icerik = kartlar.length ? kartlar : [el('p', { sinif: 'ipucu' }, 'Henüz geçmiş dönem yok.')];
+  goster(ustBolum('Geçmiş dönemler', anaEkran), ...icerik);
 }
 
 function paraDuzelt(donem, kayit) {
@@ -226,13 +304,14 @@ function paraDuzelt(donem, kayit) {
     {
       onsubmit: (o) => {
         o.preventDefault();
-        const para = paraCoz(form.elements.para.value);
-        if (para === null) return hataGoster(hata, 'Tutarı örnekteki gibi yaz: 25.000 ya da 1.250,50');
+        const yeni = paraCoz(form.elements.para.value);
+        if (yeni === null) return hataGoster(hata, 'Tutarı örnekteki gibi yaz: 25.000 ya da 1.250,50');
+        const para = kayit.para + yeni - kalanPara(kayit);
         kaydetVeUyar({ ...veri, donemler: { ...veri.donemler, [donem.baslangic]: { ...kayit, para } } });
         anaEkran();
       },
     },
-    tutarAlani('para', 'Elindeki para', paraYaz(kayit.para)),
+    tutarAlani('para', 'Elindeki para', paraYaz(Math.max(kalanPara(kayit), 0))),
     hata,
     el('button', { type: 'submit' }, 'Kaydet'),
   );

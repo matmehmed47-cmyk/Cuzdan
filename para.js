@@ -30,3 +30,21 @@ export function paraYaz(kurus) {
   const artan = String(mutlak % 100).padStart(2, '0');
   return `${isaret}${lira},${artan} TL`;
 }
+
+export function kalanPara(donem) {
+  return (donem.hareketler ?? []).reduce(
+    (toplam, h) => toplam + (h.tur === 'gelir' ? h.kurus : -h.kurus),
+    donem.para,
+  );
+}
+
+export function hareketToplami(donem, tur) {
+  return (donem.hareketler ?? []).filter((h) => h.tur === tur).reduce((t, h) => t + h.kurus, 0);
+}
+
+// Maaşa kadar kalan kesin bir harcama hakkı gibi görünmesin diye 500 TL'lik aralıkla gösterilir.
+export function yaklasikAralik(kurus) {
+  const adim = 50000;
+  const alt = Math.floor(kurus / adim) * adim;
+  return [alt, alt + adim];
+}

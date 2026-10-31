@@ -1,6 +1,20 @@
 const ANAHTAR = 'cuzdan.v1';
 const TARIH = /^\d{4}-\d{2}-\d{2}$/;
 
+function hareketlerGecerli(hareketler) {
+  if (hareketler === undefined) return true;
+  return (
+    Array.isArray(hareketler) &&
+    hareketler.every(
+      (h) =>
+        (h?.tur === 'harcama' || h?.tur === 'gelir') &&
+        TARIH.test(h.tarih) &&
+        Number.isSafeInteger(h.kurus) &&
+        h.kurus > 0,
+    )
+  );
+}
+
 export function veriGecerliMi(veri) {
   if (!veri || typeof veri !== 'object' || veri.surum !== 1) return false;
   if (typeof veri.ad !== 'string' || !veri.ad.trim() || veri.ad.length > 30) return false;
@@ -19,7 +33,7 @@ export function veriGecerliMi(veri) {
 
   if (!veri.donemler || typeof veri.donemler !== 'object') return false;
   return Object.entries(veri.donemler).every(
-    ([tarih, donem]) => TARIH.test(tarih) && Number.isSafeInteger(donem?.para) && donem.para >= 0,
+    ([tarih, donem]) => TARIH.test(tarih) && Number.isSafeInteger(donem?.para) && hareketlerGecerli(donem.hareketler),
   );
 }
 

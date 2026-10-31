@@ -203,6 +203,28 @@ button.simge {
   opacity: 0;
 }
 
+.satir {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ikili {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ikili button {
+  margin: 0;
+}
+
+.bosluk {
+  margin-top: 12px;
+}
+
 :focus-visible {
   outline: 3px solid var(--ana);
   outline-offset: 2px;

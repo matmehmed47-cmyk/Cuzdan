@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { paraCoz, paraYaz } from '../para.js';
+import { hareketToplami, kalanPara, paraCoz, paraYaz, yaklasikAralik } from '../para.js';
 import { bugunTR, donemBul, ilkAyar, maasGunuDegistir, maasKaydir } from '../donem.js';
 import { veriGecerliMi, yedekCoz } from '../depo.js';
 
@@ -104,4 +104,12 @@ test('yedek doğrulama', () => {
   assert.equal(veriGecerliMi({ ...dogru, ad: '' }), false);
   assert.equal(veriGecerliMi({ ...dogru, donemler: { '2026-10-15': { para: 1.5 } } }), false);
   assert.equal(veriGecerliMi({ ...dogru, ayar: { kurallar: [{ gecerli: '0000-01-01', gun: 32 }], kaydirma: {} } }), false);
+});
+
+test('kalan para gelir ve harcamayı hesaba katar', () => {
+  const donem = { para: 100000, hareketler: [{ tur: 'harcama', kurus: 30000 }, { tur: 'gelir', kurus: 5000 }] };
+  assert.equal(kalanPara(donem), 75000);
+  assert.equal(hareketToplami(donem, 'harcama'), 30000);
+  assert.equal(kalanPara({ para: 100 }), 100);
+  assert.deepEqual(yaklasikAralik(420000), [400000, 450000]);
 });
