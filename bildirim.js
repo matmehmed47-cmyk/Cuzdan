@@ -6,7 +6,7 @@ import { kalanPara, paraYaz } from './para.js';
 import { kenardaPara } from './plan.js';
 import { donemTaksitleri } from './taksit.js';
 
-export const VARSAYILAN_AYAR = { gunOnce: 3, saat: '09:00', maas: true, gunSonu: false, gunSonuSaat: '21:00' };
+export const VARSAYILAN_AYAR = { gunOnce: 3, saat: '09:00', maas: true, gunSonu: false, gunSonuSaat: '21:00', ikinciSaat: '20:00' };
 const ILERI_GUN = 35;
 const ABONELIK_AY = 3;
 const GUN_SONU_ILERI = 3;
@@ -39,6 +39,19 @@ function kalemYazisi(kalem) {
 }
 
 // O güne düşen her ödeme tek bildirimde toplanır; geciken, ödenene kadar her sabah yazar.
+// Ödeme gününde sabahki özetten sonra, hâlâ ödenmemişse akşam bir kez daha hatırlatılır.
+function aksamHatirlatmasi(kalemler, tarih, ayar) {
+  const saat = ayar.ikinciSaat ?? '20:00';
+  const bugunku = kalemler.filter((k) => k.vade === tarih);
+  if (!bugunku.length || saat <= ayar.saat) return null;
+  return {
+    anahtar: `aksam:${tarih}`,
+    zaman: zaman(tarih, saat),
+    baslik: bugunku.length === 1 ? bugunku[0].ad : 'Bugünkü ödemeler',
+    metin: `Bugün son gün, henüz ödenmedi: ${bugunku.map(kalemYazisi).join(', ')}.${bugunku.length > 1 ? ` Toplam: ${paraYaz(ayrilanTutar(bugunku))}.` : ''}`,
+  };
+}
+
 function gunlukOzet(kalemler, tarih, ayar, para) {
   const yaklasan = ayar.gunOnce > 0 ? gunEkle(tarih, ayar.gunOnce) : null;
   const gecikti = kalemler.filter((k) => k.vade < tarih);
@@ -97,8 +110,11 @@ export function bildirimPlani(veri, donem, kayit, bugun, ayar = bildirimAyari(ve
   const para = kalanPara(kayit);
   const plan = [];
   for (let i = 0; i <= ILERI_GUN; i += 1) {
-    const ozet = gunlukOzet(kalemler, gunEkle(bugun, i), ayar, para);
+    const gun = gunEkle(bugun, i);
+    const ozet = gunlukOzet(kalemler, gun, ayar, para);
     if (ozet) plan.push(ozet);
+    const aksam = aksamHatirlatmasi(kalemler, gun, ayar);
+    if (aksam) plan.push(aksam);
   }
 
   if (ayar.maas) {

@@ -2850,7 +2850,62 @@ function guncelPlan() {
   return bildirimPlani(veri, donem, kayit, bugun).filter((k) => !gosterilen.includes(k.anahtar));
 }
 
+const BILDIRIM_DURUM = 'cuzdan.bildirimdurum';
+const DENEME = 'cuzdan.deneme';
+const DENEME_SURESI = 10 * 60 * 1000;
+let bildirimSuruyor = false;
+let bildirimSayaci;
+
+function bildirimDurumuYaz(durum) {
+  try {
+    localStorage.setItem(BILDIRIM_DURUM, JSON.stringify({ ...durum, zaman: Date.now() }));
+  } catch {
+    // Yazılamasa da bildirim gönderimi etkilenmez.
+  }
+}
+
+function bildirimDurumuOku() {
+  try {
+    return JSON.parse(localStorage.getItem(BILDIRIM_DURUM));
+  } catch {
+    return null;
+  }
+}
+
+// Kontrol düğmesinin denemesi, uygulama araya girip planı yenilese de ilk 10 dakika planda kalır.
+function denemeKalemi() {
+  try {
+    const kalem = JSON.parse(localStorage.getItem(DENEME));
+    return kalem && Date.now() - kalem.zaman < DENEME_SURESI ? [kalem] : [];
+  } catch {
+    return [];
+  }
+}
+
+// Veri eşitlemesinden bağımsızdır; eşitleme takılsa da telefon ve plan sunucuya yazılır.
+async function bildirimEsitle() {
+  if (bildirimSuruyor || !window.fetch || !oturum() || !veri?.bildirim?.telefon || window.Notification?.permission !== 'granted') return;
+  bildirimSuruyor = true;
+  try {
+    await arkaPlanKaydi();
+    if (!(await telefonAbonesi())) throw new Error('Bu cihaz sunucu bildirimini desteklemiyor.');
+    await planGonder([...(guncelPlan() ?? []), ...denemeKalemi()]);
+    bildirimDurumuYaz({ tamam: true });
+  } catch (h) {
+    bildirimDurumuYaz({ tamam: false, hata: String(h?.message ?? h).slice(0, 120) });
+  } finally {
+    bildirimSuruyor = false;
+  }
+}
+
+function bildirimEsitleIste() {
+  clearTimeout(bildirimSayaci);
+  bildirimSayaci = setTimeout(bildirimEsitle, 1500);
+  bildirimSayaci.unref?.();
+}
+
 function planYaz() {
+  bildirimEsitleIste();
   const plan = guncelPlan();
   if (!plan || !window.caches) return;
   window.caches.open('cuzdan-bildirim').then((o) => o.put('bildirim-plan', new Response(JSON.stringify(plan)))).catch(() => {});
@@ -2918,7 +2973,12 @@ function hatirlatmaEkrani() {
     if (!destek) return iphone ? 'iPhone’da önce uygulamayı ana ekrana eklemelisin.' : 'Bu cihaz telefon bildirimini desteklemiyor.';
     if (window.Notification.permission === 'denied') return 'Bildirim izni kapalı. Telefonun ayarlarından açabilirsin.';
     if (!ayar.telefon) return 'Telefon bildirimi kapalı.';
-    if (oturum()) return 'Açık. Uygulama kapalıyken de seçtiğin saatte gelir, birkaç dakika sapabilir.';
+    if (oturum()) {
+      const son = bildirimDurumuOku();
+      if (son?.tamam === false) return `Sunucuya yazılamadı: ${son.hata}. “Bildirimi kontrol et”e bas.`;
+      if (son?.tamam) return `Açık. Sunucuya son yazılma: ${new Date(son.zaman).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}. Kapalıyken de seçtiğin saatte gelir.`;
+      return 'Açık. Sunucuya henüz yazılmadı. “Bildirimi kontrol et”e bas.';
+    }
     return arkaPlan
       ? 'Açık. Tam saatinde gelmesi için hesap aç; şimdilik saati telefon belirler.'
       : 'Açık. Bu cihaz kapalı uygulamadan bildirim çalıştıramıyor; hatırlatma açınca görünür.';
@@ -2953,7 +3013,8 @@ function hatirlatmaEkrani() {
     try {
       if (!(await telefonAbonesi())) return yaz('✗ Bu cihaz sunucu bildirimini desteklemiyor.');
       yaz('✓ Telefon sunucuya kayıtlı');
-      await planGonder([...(guncelPlan() ?? []), { anahtar: `deneme:${Date.now()}`, zaman: Date.now(), baslik: 'Cüzdan', metin: 'Sunucudan deneme bildirimi. Bildirimlerin çalışıyor.' }]);
+      localStorage.setItem(DENEME, JSON.stringify({ anahtar: `deneme:${Date.now()}`, zaman: Date.now(), baslik: 'Cüzdan', metin: 'Sunucudan deneme bildirimi. Bildirimlerin çalışıyor.' }));
+      await planGonder([...(guncelPlan() ?? []), ...denemeKalemi()]);
       yaz('✓ Deneme sunucuya gönderildi');
       yaz('Uygulamayı kapat. 5 dakika içinde bildirim gelmeli.');
     } catch (h) {
@@ -3150,6 +3211,7 @@ async function girisSonrasi() {
     esitlemeYaz({ surum: 0, kirli: Boolean(veri) });
     if (!veri) return kurulumEkrani();
     await esitle();
+    bildirimEsitle();
     return ayarlarEkrani();
   }
   if (!veriGecerliMi(uzak.veri)) throw new BulutHatasi('Hesaptaki kayıt okunamadı.', 'veri');
@@ -3225,8 +3287,6 @@ async function esitle() {
         canliTazele();
       }
     }
-    const plan = guncelPlan();
-    if (plan) await planGonder(plan);
   } catch {
     // İnternet yoksa kayıt cihazda bekler, bağlantı gelince gönderilir.
   } finally {
@@ -3591,7 +3651,7 @@ function baslat() {
   planYaz();
   gosterilenleriAl();
   esitle();
-  if (veri?.bildirim?.telefon && window.Notification?.permission === 'granted') telefonAbonesi().catch(() => {});
+  bildirimEsitle();
 
   const baglanti = new URLSearchParams(window.location.hash.slice(1));
   if (baglanti.get('type') === 'recovery' && baglanti.get('access_token')) {
@@ -3639,6 +3699,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   gosterilenleriAl();
   esitle();
+  bildirimEsitle();
   if (kok.querySelector('#ana-para')) anaEkran();
   if (Date.now() - (piyasaKaydi?.alindi ?? 0) > YENILEME_SURESI) piyasaYenile();
 });

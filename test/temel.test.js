@@ -628,6 +628,10 @@ test('hatırlatma: aynı günün ödemeleri tek bildirimde toplanır, çanı kap
   assert.equal(ozet.baslik, 'Bugünkü ödemeler');
   assert.equal(ozet.metin, 'Gecikti: Doğal gaz. Bugün: Kira 5.000,00 TL, Su 300,00 TL. 3 gün kaldı: Telefon 600,00 TL. Toplam: 5.900,00 TL.');
   assert.equal(plan.filter((k) => k.anahtar === 'ozet:2026-11-20').length, 1);
+  const aksam = plan.find((k) => k.anahtar === 'aksam:2026-11-20');
+  assert.equal(aksam.zaman, Date.parse('2026-11-20T20:00:00+03:00'));
+  assert.equal(aksam.metin, 'Bugün son gün, henüz ödenmedi: Kira 5.000,00 TL, Su 300,00 TL. Toplam: 5.300,00 TL.');
+  assert.equal(plan.some((k) => k.anahtar === 'aksam:2026-11-21'), false);
 });
 
 test('hatırlatma: tutarı belli olmayan fatura, maaş, gün sonu, para sınırı', async () => {

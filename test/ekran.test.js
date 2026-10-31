@@ -1187,7 +1187,7 @@ test('hızlı harcama: kategoriye dokununca kaydolur, geri al bandıyla geri al�
     surum: 1,
     ad: 'Ev',
     ayar,
-    faturalar: [{ id: 'k', ad: 'Kira', tur: 'sabit', gun: 31, ilkAy: bugunTR().slice(0, 7), kurus: 10000 }],
+    faturalar: [{ id: 'k', ad: 'Kira', tur: 'sabit', gun: Number(bugunTR().slice(8)), ilkAy: bugunTR().slice(0, 7), kurus: 10000 }],
     donemler: { [baslangic]: { para: 100000 } },
   }));
   const { document } = window;
