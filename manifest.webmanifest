@@ -3,6 +3,7 @@
   "short_name": "Cüzdan",
   "description": "Kişisel para ve fatura takibi",
   "lang": "tr",
+  "id": "./cuzdan-para-uygulamasi",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
