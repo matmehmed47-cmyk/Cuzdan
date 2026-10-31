@@ -62,6 +62,13 @@ test('kayıt varsa ana ekran açılır ve ad değiştirilebilir', async () => {
   const { document } = window;
 
   assert.equal(document.getElementById('ana-para').textContent, '1.000,00 TL');
+  assert.doesNotMatch(metin(window), /null|undefined/);
+  [...document.querySelectorAll('button')].find((d) => d.textContent === 'Faturalar').click();
+  assert.doesNotMatch(metin(window), /null|undefined/);
+  document.querySelector('[aria-label="Geri"]').click();
+  [...document.querySelectorAll('button')].find((d) => d.textContent === 'Harcamalar').click();
+  assert.doesNotMatch(metin(window), /null|undefined/);
+  document.querySelector('[aria-label="Geri"]').click();
   document.querySelector('[aria-label="Ayarlar"]').click();
   assert.match(metin(window), /Normal maaş günü: ayın 15/);
   assert.match(metin(window), /Hesap sistemi henüz bağlı değil/);
@@ -135,7 +142,16 @@ test('harcama ve gelir parayı değiştirir, düzeltme geçmişi korur', async (
   gonder(window, document.querySelector('form'));
   assert.equal(document.getElementById('ana-para').textContent, '800,00 TL');
   const kayit = JSON.parse(window.localStorage.getItem('cuzdan.v1'));
-  assert.equal(kayit.donemler[baslangic].hareketler.length, 2);
+  assert.equal(kayit.donemler[baslangic].hareketler.length, 3);
+  assert.equal(kayit.donemler[baslangic].hareketler[2].kategori, 'Kayıtsız');
+  assert.equal(kayit.donemler[baslangic].hareketler[2].kurus, 15050);
+
+  dugme('Tutarı düzelt').click();
+  document.getElementById('para').value = '700';
+  document.getElementById('kayitsiz').checked = false;
+  gonder(window, document.querySelector('form'));
+  assert.equal(document.getElementById('ana-para').textContent, '700,00 TL');
+  assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[baslangic].hareketler.length, 3);
 
   dugme('Geçmiş dönemler').click();
   assert.match(metin(window), /2000 dönemi/);
@@ -204,6 +220,92 @@ test('değişken fatura ödenirken tutar sorulur, Geçmiş\'te görünür', asyn
 
   dugme('Geçmiş dönemler').click();
   assert.match(metin(window), /✓ Eski: 1,00 TL/);
+});
+
+test('harcama kategori ve notla eklenir, düzeltilir, silinir', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const eski = { tur: 'harcama', kurus: 100, tarih: '2000-01-20', kategori: 'Market' };
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { '2000-01-15': { para: 500, hareketler: [eski] }, [baslangic]: { para: 100000, hareketler: [] } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayitlar = () => JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[baslangic].hareketler;
+
+  dugme('+ Harcama').click();
+  document.getElementById('tutar').value = '100';
+  dugme('Market').click();
+  assert.equal(dugme('Market').getAttribute('aria-pressed'), 'true');
+  document.getElementById('not').value = '2 kilo elma';
+  document.getElementById('tarih').value = '1999-01-01';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /bugün arasında olmalı/);
+  document.getElementById('tarih').value = bugunTR();
+  gonder(window, document.querySelector('form'));
+  assert.equal(document.getElementById('ana-para').textContent, '900,00 TL');
+  assert.equal(kayitlar()[0].kategori, 'Market');
+  assert.equal(kayitlar()[0].not, '2 kilo elma');
+
+  dugme('+ Harcama').click();
+  document.getElementById('tutar').value = '50';
+  dugme('+ Yeni kategori').click();
+  assert.equal(document.getElementById('yeni-kategori').hidden, false);
+  document.getElementById('yeni-kategori').value = 'Kırtasiye';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayitlar()[1].kategori, 'Kırtasiye');
+
+  dugme('+ Harcama').click();
+  assert.ok(dugme('Kırtasiye'));
+  assert.equal(dugme('Market').compareDocumentPosition(dugme('Yemek')) & window.Node.DOCUMENT_POSITION_FOLLOWING, window.Node.DOCUMENT_POSITION_FOLLOWING);
+  document.querySelector('[aria-label="Geri"]').click();
+
+  dugme('Harcamalar').click();
+  assert.match(metin(window), /2 kilo elma/);
+  assert.match(metin(window), /Market100,00 TL/);
+  assert.match(metin(window), /150,00 TL/);
+
+  [...document.querySelectorAll('button')].filter((d) => d.textContent === 'Düzenle').at(-1).click();
+  assert.equal(document.getElementById('tutar').value, '100,00 TL');
+  document.getElementById('tutar').value = '120';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayitlar()[0].kurus, 12000);
+  assert.equal(kayitlar()[0].not, '2 kilo elma');
+
+  [...document.querySelectorAll('button')].filter((d) => d.textContent === 'Düzenle').at(-1).click();
+  dugme('Harcamayı sil').click();
+  assert.equal(kayitlar().length, 1);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.equal(document.getElementById('ana-para').textContent, '950,00 TL');
+
+  dugme('Geçmiş dönemler').click();
+  dugme('Harcamaları gör').click();
+  assert.match(metin(window), /Market1,00 TL/);
+  assert.equal(dugme('Düzenle'), undefined);
+  assert.equal(dugme('+ Harcama'), undefined);
+});
+
+test('kategoriler ekranı: ekle, ad değiştir, sil', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 1000, hareketler: [{ tur: 'harcama', kurus: 100, tarih: bugunTR(), kategori: 'Market' }] } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+
+  dugme('Harcamalar').click();
+  dugme('Kategorileri düzenle').click();
+  document.getElementById('ad').value = 'Kırtasiye';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().kategoriler.at(-1), 'Kırtasiye');
+
+  dugme('Ad değiştir').click();
+  document.getElementById('ad').value = 'Bakkal';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().donemler[baslangic].hareketler[0].kategori, 'Bakkal');
+
+  dugme('Sil').click();
+  assert.equal(kayit().kategoriler.includes('Bakkal'), false);
+  assert.equal(kayit().donemler[baslangic].hareketler[0].kategori, 'Bakkal');
 });
 
 test('para eksiye düşerse açıkça yazar', async () => {

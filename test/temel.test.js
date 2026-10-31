@@ -14,6 +14,18 @@ import {
   faturaSil,
   odemeGeriAl,
 } from '../fatura.js';
+import {
+  VARSAYILAN_KATEGORILER,
+  harcamaEkle,
+  harcamaGuncelle,
+  harcamaListesi,
+  harcamaSil,
+  kategoriAdDegistir,
+  kategoriEkle,
+  kategoriSil,
+  kategoriToplamlari,
+  siraliKategoriler,
+} from '../harcama.js';
 
 test('para: Türkçe yazımları doğru çözer', () => {
   const ornekler = [
@@ -216,6 +228,79 @@ test('fatura: kısa ayda son gün, ilk ödeme ayı seçimi', () => {
   assert.deepEqual(baslangicAyi(20, BUGUN, donem.baslangic), { ilkAy: '2026-11', gecmisAy: '2026-10', gecmisTarih: '2026-10-20' });
   assert.equal(baslangicAyi(31, BUGUN, donem.baslangic).ilkAy, '2026-10');
   assert.equal(baslangicAyi(5, BUGUN, donem.baslangic).gecmisAy, null);
+});
+
+const harcamaVerisi = () => ({
+  surum: 1,
+  ad: 'Ev',
+  ayar: ilkAyar(15),
+  donemler: { '2026-10-15': { para: 100000, hareketler: [] } },
+});
+const BAS = '2026-10-15';
+
+test('harcama: ekleme, düzeltme ve silme parayı doğru değiştirir', () => {
+  let veri = harcamaEkle(harcamaVerisi(), BAS, { kurus: 10000, kategori: 'Market', not: '2 kilo elma', tarih: '2026-10-20' });
+  veri = harcamaEkle(veri, BAS, { kurus: 5000, tarih: '2026-10-25' });
+  assert.equal(kalanPara(veri.donemler[BAS]), 85000);
+
+  const liste = harcamaListesi(veri.donemler[BAS]);
+  assert.deepEqual(liste.map((h) => h.kurus), [5000, 10000]);
+
+  veri = harcamaGuncelle(veri, BAS, liste[1].sira, { kurus: 20000, kategori: 'Ev', not: undefined, tarih: '2026-10-21' });
+  assert.equal(kalanPara(veri.donemler[BAS]), 75000);
+  assert.equal(veri.donemler[BAS].hareketler[0].tur, 'harcama');
+  assert.equal(veri.donemler[BAS].hareketler[0].kategori, 'Ev');
+
+  veri = harcamaSil(veri, BAS, 0);
+  assert.equal(kalanPara(veri.donemler[BAS]), 95000);
+  assert.equal(veriGecerliMi(JSON.parse(JSON.stringify(veri))), true);
+});
+
+test('harcama: kategori toplamları büyükten küçüğe, kategorisiz Diğer sayılır', () => {
+  let veri = harcamaEkle(harcamaVerisi(), BAS, { kurus: 100, kategori: 'Market', tarih: BAS });
+  veri = harcamaEkle(veri, BAS, { kurus: 200, kategori: 'Market', tarih: BAS });
+  veri = harcamaEkle(veri, BAS, { kurus: 500, tarih: BAS });
+  assert.deepEqual(kategoriToplamlari(veri.donemler[BAS]), [{ ad: 'Diğer', kurus: 500 }, { ad: 'Market', kurus: 300 }]);
+});
+
+test('kategori: sık kullanılan öne geçer, aynı ad çoğalmaz', () => {
+  let veri = harcamaEkle(harcamaVerisi(), BAS, { kurus: 100, kategori: 'Giyim', tarih: BAS });
+  assert.equal(siraliKategoriler(veri)[0], 'Giyim');
+  assert.equal(siraliKategoriler(veri)[1], VARSAYILAN_KATEGORILER[0]);
+
+  const ayni = kategoriEkle(veri, 'MARKET');
+  assert.equal(ayni.ad, 'Market');
+  assert.equal(ayni.veri, veri);
+  assert.equal(kategoriEkle(veri, 'diğer').ad, undefined);
+
+  const yeni = kategoriEkle(veri, 'Kırtasiye');
+  assert.equal(yeni.veri.kategoriler.at(-1), 'Kırtasiye');
+  assert.equal(VARSAYILAN_KATEGORILER.includes('Kırtasiye'), false);
+});
+
+test('kategori: ad değişince eski kayıtlar da değişir, silince kayıt kalır', () => {
+  const veri = harcamaEkle(harcamaVerisi(), BAS, { kurus: 100, kategori: 'Market', tarih: BAS });
+
+  const degisti = kategoriAdDegistir(veri, 'Market', 'Bakkal');
+  assert.equal(degisti.donemler[BAS].hareketler[0].kategori, 'Bakkal');
+  assert.equal(degisti.kategoriler.includes('Market'), false);
+
+  const birlesti = kategoriAdDegistir(veri, 'Market', 'ev');
+  assert.equal(birlesti.donemler[BAS].hareketler[0].kategori, 'Ev');
+  assert.equal(birlesti.kategoriler.filter((k) => k === 'Ev').length, 1);
+
+  const silindi = kategoriSil(veri, 'Market');
+  assert.equal(silindi.kategoriler.includes('Market'), false);
+  assert.equal(silindi.donemler[BAS].hareketler[0].kategori, 'Market');
+});
+
+test('harcama: yedek doğrulaması uzun not ve bozuk kategoriyi reddeder', () => {
+  const eski = harcamaVerisi();
+  const hareket = (ek) => ({ ...eski, donemler: { [BAS]: { para: 0, hareketler: [{ tur: 'harcama', kurus: 1, tarih: BAS, ...ek }] } } });
+  assert.equal(veriGecerliMi(hareket({ kategori: 'Market', not: 'elma' })), true);
+  assert.equal(veriGecerliMi(hareket({ not: 'x'.repeat(81) })), false);
+  assert.equal(veriGecerliMi(hareket({ kategori: 5 })), false);
+  assert.equal(veriGecerliMi({ ...eski, kategoriler: ['Market', ''] }), false);
 });
 
 test('fatura: yedek doğrulaması bozuk faturayı reddeder, eski yedeği kabul eder', () => {

@@ -22,6 +22,20 @@ import {
   faturaSil,
   odemeGeriAl,
 } from './fatura.js';
+import {
+  DIGER,
+  KAYITSIZ,
+  harcamaEkle,
+  harcamaGuncelle,
+  harcamaListesi,
+  harcamaSil,
+  kategoriAdDegistir,
+  kategoriEkle,
+  kategoriSil,
+  kategoriToplamlari,
+  kategoriler,
+  siraliKategoriler,
+} from './harcama.js';
 
 const kok = document.getElementById('uygulama');
 let veri = null;
@@ -52,7 +66,7 @@ function tarihYaz(tarih) {
 }
 
 function goster(...dugumler) {
-  kok.replaceChildren(...dugumler);
+  kok.replaceChildren(...dugumler.filter(Boolean));
   window.scrollTo?.(0, 0);
 }
 
@@ -251,8 +265,8 @@ function anaEkran() {
     el(
       'div',
       { sinif: 'ikili' },
-      el('button', { type: 'button', onclick: () => hareketEkrani('harcama', donem, kayit) }, '+ Harcama'),
-      el('button', { type: 'button', onclick: () => hareketEkrani('gelir', donem, kayit) }, '+ Gelir'),
+      el('button', { type: 'button', onclick: () => harcamaFormu(donem) }, '+ Harcama'),
+      el('button', { type: 'button', onclick: () => gelirEkrani(donem, kayit) }, '+ Gelir'),
     ),
     el(
       'section',
@@ -272,6 +286,7 @@ function anaEkran() {
       bekleyen.length > 5 ? el('p', { sinif: 'ipucu' }, `${bekleyen.length - 5} ödeme daha var.`) : null,
       el('button', { type: 'button', sinif: 'ikincil bosluk', onclick: faturalarEkrani }, 'Faturalar'),
     ),
+    el('button', { type: 'button', sinif: 'ikincil', onclick: () => harcamalarEkrani() }, 'Harcamalar'),
     el('button', { type: 'button', sinif: 'ikincil', onclick: gecmisEkrani }, 'Geçmiş dönemler'),
     el('p', { sinif: 'ipucu orta bosluk' }, 'Veriler şimdilik sadece bu cihazda duruyor.'),
   );
@@ -467,8 +482,218 @@ function faturaFormu(mevcut = null) {
   goster(ustBolum(mevcut ? 'Faturayı düzenle' : 'Fatura ekle', faturalarEkrani), form);
 }
 
-function hareketEkrani(tur, donem, kayit) {
-  const baslik = tur === 'gelir' ? 'Gelir ekle' : 'Harcama ekle';
+/* Harcamalar */
+
+function harcamaFormu(donem, mevcut = null, geri = anaEkran) {
+  const bugun = bugunTR();
+  const hata = hataSatiri();
+  let secili = mevcut?.kategori ?? null;
+  const adlar = siraliKategoriler(veri);
+  if (secili && !adlar.includes(secili)) adlar.unshift(secili);
+
+  const yeniKutu = el('input', { id: 'yeni-kategori', maxLength: 20, placeholder: 'Yeni kategori adı', autocomplete: 'off', hidden: true });
+
+  function cipleriYaz() {
+    for (const cip of cipler) cip.setAttribute('aria-pressed', String(cip.textContent === secili));
+    if (secili) {
+      yeniKutu.hidden = true;
+      yeniKutu.value = '';
+    }
+  }
+
+  const cipler = adlar.map((ad) => el('button', {
+    type: 'button',
+    sinif: 'cip',
+    'aria-pressed': String(ad === secili),
+    onclick: () => {
+      secili = secili === ad ? null : ad;
+      cipleriYaz();
+    },
+  }, ad));
+  const yeniDugme = el('button', {
+    type: 'button',
+    sinif: 'cip',
+    onclick: () => {
+      secili = null;
+      cipleriYaz();
+      yeniKutu.hidden = false;
+      yeniKutu.focus();
+    },
+  }, '+ Yeni kategori');
+
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const kurus = paraCoz(form.elements.tutar.value);
+        if (!kurus) return hataGoster(hata, 'Sıfırdan büyük bir tutar yaz. Örnek: 100 ya da 1.250,50');
+        const tarih = form.elements.tarih.value;
+        if (!tarih || tarih < donem.baslangic || tarih > bugun) {
+          return hataGoster(hata, `Tarih ${tarihYaz(donem.baslangic)} ile bugün arasında olmalı.`);
+        }
+
+        let yeni = veri;
+        let kategori = secili ?? undefined;
+        const yazilan = yeniKutu.value.trim();
+        if (yazilan) ({ veri: yeni, ad: kategori } = kategoriEkle(veri, yazilan));
+        const bilgi = { kurus, kategori, not: form.elements.not.value.trim() || undefined, tarih };
+        kaydetVeUyar(mevcut ? harcamaGuncelle(yeni, donem.baslangic, mevcut.sira, bilgi) : harcamaEkle(yeni, donem.baslangic, bilgi));
+        geri();
+      },
+    },
+    tutarAlani('tutar', 'Tutar', mevcut ? paraYaz(mevcut.kurus) : ''),
+    el('p', { sinif: 'etiket' }, 'Kategori'),
+    el('div', { sinif: 'kategoriler' }, cipler, yeniDugme),
+    yeniKutu,
+    el('p', { sinif: 'ipucu' }, `Kategori seçmezsen “${DIGER}” sayılır.`),
+    el('label', { htmlFor: 'not' }, 'Not (isteğe bağlı)'),
+    el('input', { id: 'not', name: 'not', maxLength: 80, placeholder: 'Örnek: 2 kilo elma', value: mevcut?.not ?? '', autocomplete: 'off' }),
+    el('label', { htmlFor: 'tarih' }, 'Tarih'),
+    el('input', { id: 'tarih', name: 'tarih', type: 'date', min: donem.baslangic, max: bugun, value: mevcut?.tarih ?? bugun }),
+    el('p', { sinif: 'ipucu' }, 'Sadece bu dönemin günleri seçilebilir.'),
+    hata,
+    el('button', { type: 'submit' }, 'Kaydet'),
+    mevcut
+      ? el('button', {
+          type: 'button',
+          sinif: 'tehlike',
+          onclick: () => {
+            if (!window.confirm('Bu harcama silinsin mi? Tutarı paraya geri eklenir.')) return;
+            kaydetVeUyar(harcamaSil(veri, donem.baslangic, mevcut.sira));
+            geri();
+          },
+        }, 'Harcamayı sil')
+      : null,
+  );
+  goster(ustBolum(mevcut ? 'Harcamayı düzenle' : 'Harcama ekle', geri), form);
+}
+
+function kategoriCubugu(kurus, toplam) {
+  const dolgu = el('span');
+  dolgu.style.width = `${Math.round((kurus / toplam) * 100)}%`;
+  return el('div', { sinif: 'cubuk' }, dolgu);
+}
+
+// Tarih verilirse geçmiş dönem salt okunur gösterilir.
+function harcamalarEkrani(tarih = null) {
+  const donem = donemBul(veri.ayar, bugunTR());
+  const baslangic = tarih ?? donem.baslangic;
+  const kayit = veri.donemler[baslangic];
+  if (!kayit) return anaEkran();
+
+  const yenile = () => harcamalarEkrani();
+  const kayitlar = harcamaListesi(kayit);
+  const toplamlar = kategoriToplamlari(kayit);
+  const toplam = toplamlar.reduce((t, k) => t + k.kurus, 0);
+  goster(
+    ustBolum('Harcamalar', tarih ? gecmisEkrani : anaEkran),
+    bilgiSatiri(),
+    el(
+      'section',
+      { sinif: 'kart vurgulu' },
+      el('p', { sinif: 'etiket' }, tarih ? `${tarihYaz(tarih)} dönemi` : 'Bu dönem'),
+      el('p', { sinif: 'tutar' }, paraYaz(toplam)),
+      el('p', { sinif: 'ipucu' }, 'Fatura ödemeleri bu toplama dahil değil.'),
+    ),
+    tarih ? null : el('button', { type: 'button', onclick: () => harcamaFormu(donem, null, yenile) }, '+ Harcama'),
+    toplamlar.length
+      ? el(
+          'section',
+          { sinif: 'kart bosluk' },
+          el('h2', {}, 'Kategoriler'),
+          toplamlar.map((k) => [satir(k.ad, paraYaz(k.kurus)), kategoriCubugu(k.kurus, toplam)]),
+        )
+      : null,
+    el(
+      'section',
+      { sinif: 'kart bosluk' },
+      el('h2', {}, 'Kayıtlar'),
+      kayitlar.length
+        ? kayitlar.map((h) => el(
+            'div',
+            { sinif: 'kalem' },
+            satir(h.kategori ?? DIGER, paraYaz(h.kurus)),
+            el('p', { sinif: 'ipucu' }, h.not ? `${h.not} · ${tarihYaz(h.tarih)}` : tarihYaz(h.tarih)),
+            tarih ? null : el('button', { type: 'button', sinif: 'ikincil', onclick: () => harcamaFormu(donem, h, yenile) }, 'Düzenle'),
+          ))
+        : el('p', { sinif: 'ipucu' }, 'Henüz harcama yok.'),
+    ),
+    tarih ? null : el('button', { type: 'button', sinif: 'ikincil', onclick: kategorilerEkrani }, 'Kategorileri düzenle'),
+  );
+}
+
+function kategorilerEkrani() {
+  const hata = hataSatiri();
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const ad = form.elements.ad.value.trim();
+        if (!ad) return hataGoster(hata, 'Kategoriye bir ad yaz.');
+        kaydetVeUyar(kategoriEkle(veri, ad).veri);
+        kategorilerEkrani();
+      },
+    },
+    el('label', { htmlFor: 'ad' }, 'Yeni kategori'),
+    el('input', { id: 'ad', name: 'ad', maxLength: 20, placeholder: 'Örnek: Kırtasiye', autocomplete: 'off' }),
+    hata,
+    el('button', { type: 'submit' }, 'Ekle'),
+  );
+  goster(
+    ustBolum('Kategoriler', () => harcamalarEkrani()),
+    bilgiSatiri(),
+    el(
+      'section',
+      { sinif: 'kart' },
+      kategoriler(veri).map((ad) => el(
+        'div',
+        { sinif: 'kalem' },
+        el('p', {}, el('strong', {}, ad)),
+        el(
+          'div',
+          { sinif: 'ikili' },
+          el('button', { type: 'button', sinif: 'ikincil', onclick: () => kategoriAdEkrani(ad) }, 'Ad değiştir'),
+          el('button', {
+            type: 'button',
+            sinif: 'tehlike',
+            onclick: () => {
+              if (!window.confirm(`“${ad}” silinsin mi? Eski kayıtlar bu adla kalır.`)) return;
+              kaydetVeUyar(kategoriSil(veri, ad));
+              kategorilerEkrani();
+            },
+          }, 'Sil'),
+        ),
+      )),
+    ),
+    form,
+  );
+}
+
+function kategoriAdEkrani(eski) {
+  const hata = hataSatiri();
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const ad = form.elements.ad.value.trim();
+        if (!ad) return hataGoster(hata, 'Kategoriye bir ad yaz.');
+        kaydetVeUyar(kategoriAdDegistir(veri, eski, ad));
+        kategorilerEkrani();
+      },
+    },
+    el('label', { htmlFor: 'ad' }, 'Yeni ad'),
+    el('input', { id: 'ad', name: 'ad', maxLength: 20, value: eski, autocomplete: 'off' }),
+    el('p', { sinif: 'ipucu' }, 'Eski kayıtlar da yeni adı alır.'),
+    hata,
+    el('button', { type: 'submit' }, 'Kaydet'),
+  );
+  goster(ustBolum('Ad değiştir', kategorilerEkrani), form);
+}
+
+function gelirEkrani(donem, kayit) {
   const hata = hataSatiri();
   const form = el(
     'form',
@@ -477,7 +702,7 @@ function hareketEkrani(tur, donem, kayit) {
         o.preventDefault();
         const kurus = paraCoz(form.elements.tutar.value);
         if (!kurus) return hataGoster(hata, 'Sıfırdan büyük bir tutar yaz. Örnek: 100 ya da 1.250,50');
-        const hareketler = [...(kayit.hareketler ?? []), { tur, kurus, tarih: bugunTR() }];
+        const hareketler = [...(kayit.hareketler ?? []), { tur: 'gelir', kurus, tarih: bugunTR() }];
         kaydetVeUyar({ ...veri, donemler: { ...veri.donemler, [donem.baslangic]: { ...kayit, hareketler } } });
         anaEkran();
       },
@@ -486,7 +711,7 @@ function hareketEkrani(tur, donem, kayit) {
     hata,
     el('button', { type: 'submit' }, 'Kaydet'),
   );
-  goster(ustBolum(baslik, anaEkran), form);
+  goster(ustBolum('Gelir ekle', anaEkran), form);
 }
 
 function gecmisEkrani() {
@@ -504,6 +729,9 @@ function gecmisEkrani() {
       satir('Faturalar', paraYaz(hareketToplami(kayit, 'fatura'))),
       (kayit.hareketler ?? []).filter((h) => h.tur === 'fatura').map((h) => el('p', { sinif: 'ipucu' }, `✓ ${h.ad}: ${paraYaz(h.kurus)}`)),
       satir('Dönem sonu', paraYaz(kalanPara(kayit))),
+      hareketToplami(kayit, 'harcama')
+        ? el('button', { type: 'button', sinif: 'ikincil bosluk', onclick: () => harcamalarEkrani(tarih) }, 'Harcamaları gör')
+        : null,
     );
   });
   const icerik = kartlar.length ? kartlar : [el('p', { sinif: 'ipucu' }, 'Henüz geçmiş dönem yok.')];
@@ -512,6 +740,7 @@ function gecmisEkrani() {
 
 function paraDuzelt(donem, kayit) {
   const hata = hataSatiri();
+  const kayitsiz = el('input', { id: 'kayitsiz', type: 'checkbox', checked: true });
   const form = el(
     'form',
     {
@@ -519,12 +748,18 @@ function paraDuzelt(donem, kayit) {
         o.preventDefault();
         const yeni = paraCoz(form.elements.para.value);
         if (yeni === null) return hataGoster(hata, 'Tutarı örnekteki gibi yaz: 25.000 ya da 1.250,50');
-        const para = kayit.para + yeni - kalanPara(kayit);
-        kaydetVeUyar({ ...veri, donemler: { ...veri.donemler, [donem.baslangic]: { ...kayit, para } } });
+        const fark = yeni - kalanPara(kayit);
+        if (fark < 0 && kayitsiz.checked) {
+          kaydetVeUyar(harcamaEkle(veri, donem.baslangic, { kurus: -fark, kategori: KAYITSIZ, tarih: bugunTR() }));
+        } else {
+          kaydetVeUyar({ ...veri, donemler: { ...veri.donemler, [donem.baslangic]: { ...kayit, para: kayit.para + fark } } });
+        }
         anaEkran();
       },
     },
     tutarAlani('para', 'Elindeki para', paraYaz(Math.max(kalanPara(kayit), 0))),
+    el('label', { sinif: 'secim', htmlFor: 'kayitsiz' }, kayitsiz, el('span', {}, `Para azaldıysa farkı “${KAYITSIZ}” harcama olarak yaz`)),
+    el('p', { sinif: 'ipucu' }, 'Yanlış tutar girdiysen bu kutuyu boş bırak.'),
     hata,
     el('button', { type: 'submit' }, 'Kaydet'),
   );

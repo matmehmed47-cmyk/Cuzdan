@@ -15,8 +15,18 @@ function hareketlerGecerli(hareketler) {
         (h?.tur === 'harcama' || h?.tur === 'gelir' || faturaHareketi(h)) &&
         TARIH.test(h.tarih) &&
         Number.isSafeInteger(h.kurus) &&
-        h.kurus > 0,
+        h.kurus > 0 &&
+        (h.kategori === undefined || (typeof h.kategori === 'string' && h.kategori.length <= 20)) &&
+        (h.not === undefined || (typeof h.not === 'string' && h.not.length <= 80)),
     )
+  );
+}
+
+function kategorilerGecerli(kategoriler) {
+  if (kategoriler === undefined) return true;
+  return (
+    Array.isArray(kategoriler) &&
+    kategoriler.every((k) => typeof k === 'string' && k.trim() && k.length <= 20)
   );
 }
 
@@ -59,7 +69,7 @@ export function veriGecerliMi(veri) {
   );
   if (!kaydirmaDogru) return false;
 
-  if (!faturalarGecerli(veri.faturalar)) return false;
+  if (!faturalarGecerli(veri.faturalar) || !kategorilerGecerli(veri.kategoriler)) return false;
   if (!veri.donemler || typeof veri.donemler !== 'object') return false;
   return Object.entries(veri.donemler).every(
     ([tarih, donem]) => TARIH.test(tarih) && Number.isSafeInteger(donem?.para) && hareketlerGecerli(donem.hareketler),
