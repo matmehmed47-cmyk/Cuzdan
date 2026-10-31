@@ -37,20 +37,24 @@ export function donemKalemleri(veri, donem, bugun) {
   const kalemler = [];
 
   for (const fatura of veri.faturalar ?? []) {
+    let sonTutar = null;
     for (let ay = fatura.ilkAy; vadeBul(ay, fatura.gun) <= donem.bitis; ay = ayIleri(ay)) {
       const vade = vadeBul(ay, fatura.gun);
       const odeme = odemeler.get(`${fatura.id}|${ay}`);
       const temel = { faturaId: fatura.id, ad: fatura.ad, tur: fatura.tur, ay, vade };
+      // Tutarı boş fatura geçen ayın tutarıyla ayrılır, yoksa serbest para olduğundan fazla görünür.
+      const tutar = { kurus: fatura.kurus ?? sonTutar, tahmin: fatura.kurus === undefined && sonTutar !== null };
 
       if (odeme) {
+        sonTutar = odeme.hareket.kurus;
         const buDonemde = odeme.baslangic === donem.baslangic;
         if (buDonemde || vade >= donem.baslangic) {
           kalemler.push({ ...temel, kurus: odeme.hareket.kurus, durum: 'odendi', geriAlinabilir: buDonemde });
         }
       } else if (fatura.atlanan?.includes(ay)) {
-        if (vade >= donem.baslangic) kalemler.push({ ...temel, kurus: fatura.kurus ?? null, durum: 'atlandi' });
+        if (vade >= donem.baslangic) kalemler.push({ ...temel, ...tutar, durum: 'atlandi' });
       } else {
-        kalemler.push({ ...temel, kurus: fatura.kurus ?? null, durum: vade < bugun ? 'gecikti' : 'bekliyor' });
+        kalemler.push({ ...temel, ...tutar, durum: vade < bugun ? 'gecikti' : 'bekliyor' });
       }
     }
   }

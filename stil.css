@@ -1395,6 +1395,64 @@ button.hareket + button.hareket {
   margin-top: 12px;
 }
 
+/* Geri al bandı */
+
+.kayit-bandi {
+  position: fixed;
+  right: 16px;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  left: 16px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 8px 8px 8px 16px;
+  border-radius: 14px;
+  background: #14201c;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+  color: #ffffff;
+}
+
+.kayit-bandi button {
+  flex: none;
+  width: auto;
+  min-height: 40px;
+  margin: 0;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 16%);
+  color: #ffffff;
+}
+
+/* Diğer seçenekler */
+
+details.secenekler {
+  margin-top: 4px;
+}
+
+details.secenekler summary {
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--ana);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.hero-dugmeler {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hero-dugmeler button.hayalet + button.hayalet {
+  margin: 0;
+}
+
 /* İmza */
 
 .imza {

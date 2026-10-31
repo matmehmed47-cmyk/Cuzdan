@@ -142,7 +142,7 @@ test('harcama ve gelir parayı değiştirir, düzeltme geçmişi korur', async (
   gonder(window, document.querySelector('form'));
   assert.equal(document.getElementById('ana-para').textContent, '950,50 TL');
 
-  dugme('Tutarı düzelt').click();
+  dugme('Toplam parayı düzelt').click();
   document.getElementById('para').value = '800';
   gonder(window, document.querySelector('form'));
   assert.equal(document.getElementById('ana-para').textContent, '800,00 TL');
@@ -151,7 +151,7 @@ test('harcama ve gelir parayı değiştirir, düzeltme geçmişi korur', async (
   assert.equal(kayit.donemler[baslangic].hareketler[2].kategori, 'Kayıtsız');
   assert.equal(kayit.donemler[baslangic].hareketler[2].kurus, 15050);
 
-  dugme('Tutarı düzelt').click();
+  dugme('Toplam parayı düzelt').click();
   document.getElementById('para').value = '700';
   document.getElementById('kayitsiz').checked = false;
   gonder(window, document.querySelector('form'));
@@ -237,9 +237,9 @@ test('harcama kategori ve notla eklenir, düzeltilir, silinir', async () => {
   const kayitlar = () => JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[baslangic].hareketler;
 
   dugme('+ Harcama').click();
-  document.getElementById('tutar').value = '100';
   dugme('Market').click();
   assert.equal(dugme('Market').getAttribute('aria-pressed'), 'true');
+  document.getElementById('tutar').value = '100';
   document.getElementById('not').value = '2 kilo elma';
   document.getElementById('tarih').value = '1999-01-01';
   gonder(window, document.querySelector('form'));
@@ -660,6 +660,7 @@ test('hesap makinesi: ekran, son işlemler, harcamaya aktarma, formu bozmadan ak
 
   dugme('Harcamaya aktar').click();
   assert.equal(document.getElementById('tutar').value, '135,00 TL');
+  document.querySelector('details').open = true;
   dugme('Market').click();
   document.getElementById('not').value = 'Domates';
   document.querySelector('[aria-label="Hesap makinesi"]').click();
@@ -1056,4 +1057,69 @@ test('imza: ana ekranda küçük, Hakkında sayfasında ad ile birlikte', async 
   assert.ok(document.querySelector('.imza.canli'));
   document.querySelector('[aria-label="Geri"]').click();
   assert.ok(document.getElementById('ana-para'));
+});
+
+test('hızlı harcama: kategoriye dokununca kaydolur, geri al bandıyla geri alınır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({
+    surum: 1,
+    ad: 'Ev',
+    ayar,
+    faturalar: [{ id: 'k', ad: 'Kira', tur: 'sabit', gun: 31, ilkAy: bugunTR().slice(0, 7), kurus: 10000 }],
+    donemler: { [baslangic]: { para: 100000 } },
+  }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const hareket = () => JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[baslangic].hareketler ?? [];
+
+  dugme('+ Harcama').click();
+  assert.equal(document.activeElement, document.getElementById('tutar'));
+  dugme('Market').click();
+  assert.equal(hareket().length, 0);
+  dugme('Market').click();
+  document.getElementById('tutar').value = '250';
+  dugme('Market').click();
+  assert.equal(hareket().length, 1);
+  assert.equal(hareket()[0].kategori, 'Market');
+  assert.match(document.querySelector('.kayit-bandi').textContent, /250,00 TL kaydedildi/);
+
+  dugme('Geri al').click();
+  assert.equal(hareket().length, 0);
+  assert.equal(document.querySelector('.kayit-bandi'), null);
+  assert.equal(document.getElementById('ana-para').textContent, '900,00 TL');
+
+  dugme('✓ Ödedim').click();
+  assert.equal(hareket().length, 1);
+  assert.match(document.querySelector('.kayit-bandi').textContent, /Kira ödendi/);
+  dugme('Geri al').click();
+  assert.equal(hareket().length, 0);
+});
+
+test('telefonun geri tuşu ekranlar arasında geri götürür', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100 } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const geriTusu = () => window.dispatchEvent(new window.PopStateEvent('popstate'));
+
+  dugme('Masraf planı').click();
+  dugme('+ Masraf ekle').click();
+  assert.match(metin(window), /Masraf ekle/);
+  geriTusu();
+  assert.match(metin(window), /Masraflar için ayrılan/);
+  geriTusu();
+  assert.ok(document.getElementById('ana-para'));
+
+  dugme('Piyasa').click();
+  geriTusu();
+  assert.ok(document.getElementById('ana-para'));
+
+  dugme('+ Harcama').click();
+  document.querySelector('[aria-label="Hesap makinesi"]').click();
+  assert.ok(document.querySelector('.hesap-perde'));
+  geriTusu();
+  assert.equal(document.querySelector('.hesap-perde'), null);
+  assert.ok(document.getElementById('tutar'));
 });

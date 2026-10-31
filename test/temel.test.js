@@ -802,3 +802,19 @@ test('hareketler: sıra, gruplar, giren ve çıkan', async () => {
   assert.deepEqual(gunlereAyir(hareketListesi(kayit)).map(([g, l]) => [g, l.length]), [['2026-11-18', 2], ['2026-11-17', 1], ['2026-11-16', 1], ['2026-11-15', 3]]);
   assert.deepEqual(hareketListesi({ para: 1 }), []);
 });
+
+test('tutarı boş fatura geçen ayın tutarıyla ayrılır', () => {
+  const veri = ornekVeri({
+    faturalar: [{ id: 'e', ad: 'Elektrik', tur: 'degisken', gun: 20, ilkAy: '2026-10' }],
+    donemler: { '2026-11-15': { para: 500000, hareketler: [{ tur: 'fatura', faturaId: 'e', ay: '2026-10', ad: 'Elektrik', kurus: 85000, tarih: '2026-10-20' }] } },
+  });
+  const kalem = donemKalemleri(veri, ornekDonem, '2026-11-16').find((k) => k.ay === '2026-11');
+  assert.equal(kalem.kurus, 85000);
+  assert.equal(kalem.tahmin, true);
+  assert.equal(ayrilanTutar([kalem]), 85000);
+
+  const ilk = ornekVeri({ faturalar: [{ id: 'e', ad: 'Elektrik', tur: 'degisken', gun: 20, ilkAy: '2026-11' }] });
+  assert.equal(donemKalemleri(ilk, ornekDonem, '2026-11-16')[0].kurus, null);
+  const sabit = ornekVeri();
+  assert.equal(donemKalemleri(sabit, ornekDonem, '2026-11-16')[0].tahmin, false);
+});
