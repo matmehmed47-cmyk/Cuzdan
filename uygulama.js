@@ -85,6 +85,7 @@ import {
   YENILEME_SURESI,
   fiyatCoz,
   fiyatYaz,
+  neAlir,
   piyasaDurumu,
   piyasaKaydet,
   piyasaYukle,
@@ -1744,6 +1745,7 @@ function piyasaEkrani() {
       }, ikon('yenile'), piyasaYukleniyor ? 'Yenileniyor' : 'Yenile'),
     ),
     piyasaHata && piyasaKaydi ? el('p', { sinif: 'ipucu', role: 'status' }, 'Yeni fiyat alınamadı, son bilinen fiyat gösteriliyor.') : null,
+    el('button', { type: 'button', onclick: paramNeAlirEkrani }, 'Param ne alır?'),
     el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Döviz')),
     el('div', { sinif: 'izgara' }, DOVIZLER.map(fiyatKarti)),
     el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Altın')),
@@ -1760,6 +1762,68 @@ function piyasaEkrani() {
     el('p', { sinif: 'ipucu orta bosluk' }, `Büyük yazılan satış fiyatıdır. Yaklaşık fiyattır, 5 dakikada bir yenilenir. Banka, döviz bürosu ve kuyumcu fiyatları farklı olabilir. Kaynak: ${KAYNAK_ADI}.`),
   );
   canliEkran = piyasaEkrani;
+}
+
+function serbestPara(donem, kayit, bugun) {
+  return kalanPara(kayit) - ayrilanTutar([...donemKalemleri(veri, donem, bugun), ...donemTaksitleri(veri, donem, bugun)]);
+}
+
+function paramNeAlirEkrani() {
+  const bugun = bugunTR();
+  const donem = donemBul(veri.ayar, bugun);
+  const kayit = veri.donemler[donem.baslangic];
+  if (!kayit) return anaEkran();
+
+  const serbest = serbestPara(donem, kayit, bugun);
+  const kalemler = [
+    ['USD', 'Dolar', (m) => `${fiyatYaz(m)} dolar`],
+    ['EUR', 'Euro', (m) => `${fiyatYaz(m)} euro`],
+    ['GRA', 'Gram altın', (m) => `${fiyatYaz(m)} gram`],
+    ['CEYREKALTIN', 'Çeyrek altın', (m) => `${Math.floor(m)} adet`],
+    ['YARIMALTIN', 'Yarım altın', (m) => `${Math.floor(m)} adet`],
+    ['TAMALTIN', 'Tam altın', (m) => `${Math.floor(m)} adet`],
+  ];
+  const [etiket, kutu] = tutarAlani('tutar', 'Ne kadar paran var?');
+  const hata = hataSatiri();
+  const sonuc = el('div', { sinif: 'izgara bosluk', id: 'ne-alir' });
+
+  function hesapla() {
+    const kurus = paraCoz(kutu.value);
+    hata.hidden = true;
+    if (kutu.value.trim() && !kurus) hataGoster(hata, 'Tutarı örnekteki gibi yaz: 25.000 ya da 1.250,50');
+    sonuc.replaceChildren(...(kurus ? kalemler : []).map(([kod, ad, yaz]) => {
+      const fiyat = fiyatBul(kod);
+      return el(
+        'div',
+        { sinif: 'mini' },
+        el('p', { sinif: 'etiket' }, ad),
+        el('p', { sinif: 'kutu-buyuk' }, fiyat ? yaz(neAlir(kurus, fiyat.satis)) : 'Fiyat yok'),
+      );
+    }));
+  }
+
+  kutu.addEventListener('input', hesapla);
+  goster(
+    ustBolum('Param ne alır?', piyasaEkrani),
+    el(
+      'form',
+      { onsubmit: (o) => o.preventDefault() },
+      etiket,
+      kutu,
+      hata,
+      el('button', {
+        type: 'button',
+        sinif: 'ikincil',
+        disabled: serbest <= 0,
+        onclick: () => {
+          kutu.value = paraYaz(serbest);
+          hesapla();
+        },
+      }, `Serbest paramı getir (${paraYaz(serbest)})`),
+    ),
+    sonuc,
+    el('p', { sinif: 'ipucu orta bosluk' }, 'Yaklaşık hesaptır, güncel satış fiyatı kullanılır. Banka, döviz bürosu ve kuyumcu fiyatları farklı olabilir.'),
+  );
 }
 
 function canliTazele() {

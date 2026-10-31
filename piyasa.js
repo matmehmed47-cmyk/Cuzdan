@@ -70,6 +70,11 @@ export function fiyatYaz(sayi, ondalik = 2) {
   return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: ondalik, maximumFractionDigits: ondalik }).format(sayi);
 }
 
+// Kullanıcı TL verip satın aldığı için satış fiyatı kullanılır.
+export function neAlir(kurus, fiyat) {
+  return kurus / 100 / fiyat;
+}
+
 export function piyasaYukle() {
   try {
     const kayit = JSON.parse(localStorage.getItem(ANAHTAR));

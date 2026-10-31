@@ -607,3 +607,34 @@ test('piyasa fiyatları gösterilir, kaynak bozulunca son fiyat kalır', async (
   assert.match(metin(window), /son bilinen fiyat/);
   assert.match(metin(window), /6\.100,00 TL/);
 });
+
+test('param ne alır: satış fiyatıyla hesaplar, serbest parayı getirir', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 2150000 } } }), (w) => {
+    w.fetch = async (adres) => fiyatCevabi(adres);
+  });
+  await new Promise((bitti) => setTimeout(bitti, 20));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent.startsWith(m));
+  const kutu = () => document.getElementById('tutar');
+  const yaz = (deger) => {
+    kutu().value = deger;
+    kutu().dispatchEvent(new window.Event('input', { bubbles: true }));
+  };
+
+  dugme('Piyasa').click();
+  dugme('Param ne alır').click();
+  yaz('4.300');
+  assert.match(metin(window), /100,00 dolar/);
+  yaz('yanlış');
+  assert.match(metin(window), /Tutarı örnekteki gibi yaz/);
+  assert.equal(document.getElementById('ne-alir').textContent, '');
+
+  dugme('Serbest paramı getir').click();
+  assert.equal(kutu().value, '21.500,00 TL');
+  assert.match(metin(window), /500,00 dolar/);
+  assert.match(metin(window), /2 adet/);
+  assert.match(metin(window), /Fiyat yok/);
+  assert.match(metin(window), /Yaklaşık hesaptır/);
+});
