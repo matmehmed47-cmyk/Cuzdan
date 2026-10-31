@@ -114,6 +114,7 @@ import { sesAyarla, sesCal } from './sesler.js';
 import { imzaSvg } from './imza.js';
 import { BIRIMLER, birimBul, cevir, gerekli } from './cevirici.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
+import { SORULAR, verkiCevabi } from './verki.js';
 import { konusmaCoz } from './ses.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
 import {
@@ -144,6 +145,7 @@ const IKONLAR = {
   gecmis: '<path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4.500v4h4"/><path d="M12 8v4.500l3 1.8"/>',
   ayar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.900l.1.100a2 2 0 1 1-2.8 2.800l-.1-.1a1.7 1.7 0 0 0-2.9 1.200V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.200l-.1.1a2 2 0 1 1-2.8-2.800l.1-.1a1.7 1.7 0 0 0-1.2-2.900H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.900l-.1-.1a2 2 0 1 1 2.8-2.800l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.500V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.200l.1-.1a2 2 0 1 1 2.8 2.800l-.1.1a1.7 1.7 0 0 0 1.2 2.900h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   geri: '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
+  verki: '<path d="M12 3.500l1.800 5.200 5.200 1.800-5.200 1.800L12 17.500l-1.800-5.200L5 10.500l5.200-1.800z"/><path d="M18.500 15.500l.7 1.800 1.800.7-1.800.7-.7 1.800-.7-1.800-1.800-.7 1.800-.7z"/>',
   zil: '<path d="M6 10a6 6 0 1 1 12 0c0 5 2 6.500 2 6.500H4s2-1.500 2-6.500z"/><path d="M10 20a2.200 2.200 0 0 0 4 0"/>',
   zilKapali: '<path d="M6 10a6 6 0 1 1 12 0c0 5 2 6.500 2 6.500H4s2-1.500 2-6.500z"/><path d="M10 20a2.200 2.200 0 0 0 4 0"/><path d="m4 3.500 16 17"/>',
   kalem: '<path d="M4 20l1-4.500L16.5 4l3.5 3.500L8.5 19z"/>',
@@ -224,12 +226,42 @@ function altMenu(aktif) {
   return el(
     'nav',
     { sinif: 'alt-menu', 'aria-label': 'Ana menü' },
+    el('button', { type: 'button', sinif: 'verki-dugme', 'aria-label': 'Verki', onclick: () => verkiEkrani() }, ikon('verki')),
     sekmeler.map(([kod, ad, simge, ac]) => el(
       'button',
       { type: 'button', onclick: ac, ...(kod === aktif ? { 'aria-current': 'page' } : {}) },
       ikon(simge),
       ad,
     )),
+  );
+}
+
+function verkiEkrani(secili = null) {
+  const bugun = bugunTR();
+  const cevap = secili ? verkiCevabi(secili, veri, bugun) : null;
+  goster(
+    ustBolum('Verki', anaEkran),
+    el(
+      'section',
+      { sinif: 'kart verki-kart' },
+      el('span', { sinif: 'verki-simge', 'aria-hidden': 'true' }, ikon('verki')),
+      el('div', {}, el('h2', {}, 'Merhaba, ben Verki'), el('p', { sinif: 'ipucu' }, 'Paranla ilgili sorularını cevaplarım. Sayıları senin kayıtlarından hesaplarım.')),
+    ),
+    el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', {
+      type: 'button',
+      sinif: kod === secili ? 'verki-soru secili' : 'verki-soru',
+      'aria-pressed': String(kod === secili),
+      onclick: () => verkiEkrani(kod),
+    }, soru))),
+    cevap
+      ? el(
+          'section',
+          { sinif: 'kart bosluk', role: 'status' },
+          el('p', { sinif: 'verki-cevap' }, cevap.ozet),
+          cevap.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null)),
+        )
+      : el('p', { sinif: 'ipucu orta bosluk' }, 'Bir soruya dokun.'),
+    el('p', { sinif: 'ipucu orta bosluk' }, 'Yazarak ve konuşarak sorma yakında eklenecek.'),
   );
 }
 

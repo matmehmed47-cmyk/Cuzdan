@@ -1047,6 +1047,98 @@ button.varlik {
   border-radius: 14px;
 }
 
+/* Verki */
+
+button.verki-dugme {
+  position: absolute;
+  top: -68px;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 0 0 -28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--hero);
+  color: #ffffff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--zemin) 85%, transparent), 0 8px 22px rgb(0 0 0 / 28%);
+}
+
+button.verki-dugme .ikon svg {
+  width: 26px;
+  height: 26px;
+  fill: currentcolor;
+  stroke: currentcolor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.alt-menu button.verki-dugme {
+  min-height: 56px;
+  padding: 0;
+  color: #ffffff;
+}
+
+.verki-kart {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.verki-simge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--hero);
+  color: #ffffff;
+}
+
+.verki-simge svg {
+  width: 24px;
+  height: 24px;
+  fill: currentcolor;
+  stroke: currentcolor;
+  stroke-width: 1.2;
+}
+
+.verki-sorular {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 0;
+}
+
+button.verki-soru {
+  width: auto;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid var(--cizgi);
+  border-radius: 20px;
+  background: var(--yuzey);
+  color: var(--yazi);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+button.verki-soru.secili {
+  border-color: transparent;
+  background: var(--vurgu-zemin);
+  color: var(--ana);
+}
+
+.verki-cevap {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 /* Tablet */
 
 @media (min-width: 820px) {

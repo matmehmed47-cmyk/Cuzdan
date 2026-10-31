@@ -203,6 +203,24 @@ test('fatura: sonraki dönemin ödemesi erken ödenir, sonraki dönemde beklemez
   assert.equal(donemKalemleri(odendi, sonraki, '2026-11-16')[0].durum, 'odendi');
 });
 
+test('verki: bugünkü, geciken ve haftalık ödemeler uygulamanın hesabıyla gelir', async () => {
+  const { verkiCevabi } = await import('../verki.js');
+  const veri = faturaVerisi([
+    { id: 'a', ad: 'Kira', tur: 'sabit', gun: 31, kurus: 500000, ilkAy: '2026-10' },
+    { id: 'b', ad: 'Su', tur: 'sabit', gun: 29, kurus: 30000, ilkAy: '2026-10' },
+    { id: 'c', ad: 'Telefon', tur: 'sabit', gun: 3, kurus: 60000, ilkAy: '2026-11' },
+    { id: 'd', ad: 'Gaz', tur: 'degisken', gun: 31, ilkAy: '2026-10' },
+  ]);
+  const bugun = verkiCevabi('bugun', veri, BUGUN);
+  assert.equal(bugun.ozet, 'Bugün 2 ödemen var. Toplam 5.000,00 TL (tutarı belli olmayan hariç). Ayrıca 1 geciken ödemen var.');
+  assert.deepEqual(bugun.satirlar.map((s) => s.ad), ['Kira', 'Gaz', 'Su']);
+  assert.equal(verkiCevabi('geciken', veri, BUGUN).ozet, '1 geciken ödemen var. Toplam 300,00 TL.');
+  assert.equal(verkiCevabi('hafta', veri, BUGUN).satirlar.at(-1).ad, 'Telefon');
+  assert.equal(verkiCevabi('serbest', veri, BUGUN).ozet, 'Serbest paran 4.100,00 TL.');
+  assert.equal(verkiCevabi('gunluk', veri, BUGUN).ozet, 'Maaşa 15 gün var. Günde en fazla 273,33 TL harcayabilirsin.');
+  assert.match(verkiCevabi('kategori', veri, BUGUN).ozet, /henüz harcama girmedin/);
+});
+
 test('fatura: değişken tutar belli değilse ayrılan değişmez, gerçek tutar kaydedilir', () => {
   const veri = faturaVerisi([elektrik]);
   const [kalem] = donemKalemleri(veri, donem, BUGUN);
