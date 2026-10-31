@@ -423,3 +423,58 @@ test('fatura: yedek doğrulaması bozuk faturayı reddeder, eski yedeği kabul e
   assert.equal(veriGecerliMi({ ...eski, faturalar: [{ ...kira, ilkAy: '2020-13' }] }), false);
   assert.equal(veriGecerliMi({ ...eski, faturalar: [{ ...kira, gun: 32 }] }), false);
 });
+
+test('birikim miktarı: gram ondalıklı, adet tam, Türkçe yazım', async () => {
+  const { miktarCoz, miktarYaz, bugunkuDeger } = await import('../birikim.js');
+  assert.equal(miktarCoz('2,5', 'gram'), 2500);
+  assert.equal(miktarCoz('0,125', 'gram'), 125);
+  assert.equal(miktarCoz('1.250', 'dolar'), 1250000);
+  assert.equal(miktarCoz('1,5', 'ceyrek'), null);
+  assert.equal(miktarCoz('2', 'ceyrek'), 2000);
+  assert.equal(miktarCoz('0', 'gram'), null);
+  assert.equal(miktarCoz('abc', 'gram'), null);
+  assert.equal(miktarYaz(2500, 'gram'), '2,5 gram');
+  assert.equal(miktarYaz(1250000, 'dolar'), '1.250 dolar');
+  assert.equal(bugunkuDeger(2500, 6000), 1500000);
+});
+
+test('ay ay özet üstüne ekleyerek gider, önceki yıl da sayılır', async () => {
+  const { aylikOzet } = await import('../birikim.js');
+  const birikimler = [
+    { id: '1', tur: 'gram', islem: 'alis', miktar: 3000, tarih: '2026-12-05' },
+    { id: '2', tur: 'gram', islem: 'alis', miktar: 2000, tarih: '2027-01-05' },
+    { id: '3', tur: 'gram', islem: 'satis', miktar: 1000, tarih: '2027-02-05' },
+    { id: '4', tur: 'dolar', islem: 'alis', miktar: 9000, tarih: '2027-02-06' },
+  ];
+  const ozet = aylikOzet({ birikimler }, 'gram', '2027');
+  assert.deepEqual(ozet.aylar.map((a) => a.toplam), [5000, 4000]);
+  assert.equal(ozet.alinan, 2000);
+  assert.equal(ozet.satilan, 1000);
+});
+
+test('satış parayı artırır, birikim alışı azaltır', () => {
+  const donem = { para: 1000, hareketler: [{ tur: 'birikim', kurus: 300 }, { tur: 'satis', kurus: 100 }] };
+  assert.equal(kalanPara(donem), 800);
+});
+
+test('fiyat çözümü bozuk ve sıfır değerleri almaz, hafta sonu kapalıdır', async () => {
+  const { fiyatCoz, tcmbCoz, piyasaDurumu } = await import('../piyasa.js');
+  assert.equal(fiyatCoz({ USD: { Buying: 1, Selling: 2 } }), null);
+  assert.equal(fiyatCoz('bozuk'), null);
+  const sonuc = fiyatCoz({ Update_Date: '2026-10-30 10:52:01', USD: { Buying: 0, Selling: 2 }, GRA: { Buying: 5, Selling: 6, Change: 'x' } });
+  assert.deepEqual(sonuc, { tarih: '2026-10-30', saat: '10:52', fiyatlar: { GRA: { alis: 5, satis: 6, degisim: null } } });
+  assert.equal(tcmbCoz({ tarih: 'dün' }), null);
+  assert.equal(piyasaDurumu(null, 0, '2026-10-30'), 'yok');
+  const kayit = { tarih: '2026-10-30', alindi: 0 };
+  assert.equal(piyasaDurumu(kayit, 60000, '2026-10-30'), 'guncel');
+  assert.equal(piyasaDurumu(kayit, 3600000, '2026-10-30'), 'eski');
+  assert.equal(piyasaDurumu(kayit, 60000, '2026-10-31'), 'kapali');
+});
+
+test('birikimli yedek geçerlidir, bozuk birikim reddedilir', () => {
+  const temel = { surum: 1, ad: 'Ev', ayar: ilkAyar(15), donemler: { '2026-10-15': { para: 1, hareketler: [{ tur: 'birikim', kurus: 5, tarih: '2026-10-16', birikimId: 'b1', ad: 'Gram altın' }] } } };
+  const kayit = { id: 'b1', tur: 'gram', islem: 'alis', miktar: 1000, tarih: '2026-10-16', kurus: 5, paradan: true };
+  assert.equal(veriGecerliMi({ ...temel, birikimler: [kayit] }), true);
+  assert.equal(veriGecerliMi({ ...temel, birikimler: [{ ...kayit, tur: 'gumus' }] }), false);
+  assert.equal(veriGecerliMi({ ...temel, birikimler: [{ ...kayit, miktar: 0 }] }), false);
+});

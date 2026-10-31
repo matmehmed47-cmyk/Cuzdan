@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { bugunTR, donemBul, ilkAyar } from '../donem.js';
 
-async function uygulamaAc(baslangic) {
+async function uygulamaAc(baslangic, hazirla) {
   const dom = new JSDOM('<!doctype html><main id="uygulama"></main>', { url: 'https://ornek.test/cuzdan/' });
   const { window } = dom;
   if (baslangic) window.localStorage.setItem('cuzdan.v1', baslangic);
   window.confirm = () => true;
   window.scrollTo = () => {};
+  hazirla?.(window);
   globalThis.window = window;
   globalThis.document = window.document;
   globalThis.localStorage = window.localStorage;
@@ -67,12 +68,12 @@ test('kayıt varsa ana ekran açılır ve ad değiştirilebilir', async () => {
 
   assert.equal(document.getElementById('ana-para').textContent, '1.000,00 TL');
   assert.doesNotMatch(metin(window), /null|undefined/);
-  [...document.querySelectorAll('button')].find((d) => d.textContent === 'Faturalar').click();
+  [...document.querySelectorAll('button')].find((d) => d.textContent === 'Ödemeler').click();
   assert.doesNotMatch(metin(window), /null|undefined/);
-  document.querySelector('[aria-label="Geri"]').click();
+  [...document.querySelectorAll('button')].find((d) => d.textContent === 'Ana sayfa').click();
   [...document.querySelectorAll('button')].find((d) => d.textContent === 'Harcamalar').click();
   assert.doesNotMatch(metin(window), /null|undefined/);
-  document.querySelector('[aria-label="Geri"]').click();
+  [...document.querySelectorAll('button')].find((d) => d.textContent === 'Ana sayfa').click();
   document.querySelector('[aria-label="Ayarlar"]').click();
   assert.match(metin(window), /Normal maaş günü: ayın 15/);
   assert.match(metin(window), /Hesap sistemi henüz bağlı değil/);
@@ -170,7 +171,7 @@ test('fatura eklenir, serbest para azalır, ödenince geri alınabilir', async (
   const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
 
   assert.match(metin(window), /Henüz ödeme eklemedin/);
-  dugme('Faturalar').click();
+  dugme('Ödemeler').click();
   dugme('+ Fatura ekle').click();
 
   gonder(window, document.querySelector('form'));
@@ -198,7 +199,7 @@ test('fatura eklenir, serbest para azalır, ödenince geri alınabilir', async (
   assert.match(metin(window), /Bugün/);
   assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[baslangic].hareketler.length, 0);
 
-  document.querySelector('[aria-label="Geri"]').click();
+  dugme('Ana sayfa').click();
   assert.equal(document.getElementById('ana-para').textContent, '700,00 TL');
   assert.match(metin(window), /Ödemelere ayrıldı300,00 TL/);
   assert.match(metin(window), /Toplam para1\.000,00 TL/);
@@ -278,7 +279,7 @@ test('harcama kategori ve notla eklenir, düzeltilir, silinir', async () => {
   dugme('Harcamayı sil').click();
   assert.equal(kayitlar().length, 1);
 
-  document.querySelector('[aria-label="Geri"]').click();
+  [...document.querySelectorAll('button')].find((d) => d.textContent === 'Ana sayfa').click();
   assert.equal(document.getElementById('ana-para').textContent, '950,00 TL');
 
   dugme('Geçmiş dönemler').click();
@@ -303,7 +304,7 @@ test('kategoriler ekranı: ekle, ad değiştir, sil', async () => {
   assert.equal(kayit().kategoriler.at(-1), 'Kırtasiye');
 
   const satirDugmesi = (ad, yazi) => [...document.querySelectorAll('.kalem')]
-    .find((k) => k.querySelector('strong').textContent === ad)
+    .find((k) => k.querySelector('.satir span').textContent === ad)
     .querySelector(`button.${yazi}`);
   satirDugmesi('Market', 'ikincil').click();
   document.getElementById('ad').value = 'Bakkal';
@@ -436,6 +437,7 @@ test('taksit eklenir, ayrılır, ödenir, geri alınır, biter', async () => {
   const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
   const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
 
+  dugme('Ödemeler').click();
   dugme('Taksitler').click();
   assert.doesNotMatch(metin(window), /null|undefined/);
   dugme('+ Taksit ekle').click();
@@ -483,4 +485,125 @@ test('para eksiye düşerse açıkça yazar', async () => {
   const baslangic = donemBul(ayar, bugunTR()).baslangic;
   const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100, hareketler: [{ tur: 'harcama', kurus: 300, tarih: baslangic }] } } }));
   assert.match(metin(window), /2,00 TL eksidesin/);
+});
+
+function fiyatCevabi(adres) {
+  const govde = adres.endsWith('tcmb.json')
+    ? { tarih: '2026-10-30', USD: { alis: 40, satis: 41 }, EUR: { alis: 50, satis: 51 } }
+    : {
+        Update_Date: `${bugunTR()} 10:52:01`,
+        USD: { Buying: 42, Selling: 43, Change: 0.07 },
+        EUR: { Buying: 52, Selling: 53, Change: -0.26 },
+        GRA: { Buying: 6000, Selling: 6100, Change: -3.5 },
+        CEYREKALTIN: { Buying: 10000, Selling: 10200, Change: 0 },
+        ONS: { Buying: 0, Selling: 0, Change: 1 },
+      };
+  return { ok: true, json: async () => govde };
+}
+
+test('birikim eklenir, paradan düşer, harcama sayılmaz, satılır, silinir', async () => {
+  const ayar = ilkAyar(15);
+  const bugun = bugunTR();
+  const baslangic = donemBul(ayar, bugun).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 5000000 } } }), (w) => {
+    w.fetch = async (adres) => fiyatCevabi(adres);
+  });
+  await new Promise((bitti) => setTimeout(bitti, 20));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+
+  dugme('Birikim').click();
+  dugme('+ Birikim ekle').click();
+  document.getElementById('miktar').value = '2,5';
+  document.getElementById('tutar').value = '15.000';
+  gonder(window, document.querySelector('form'));
+  assert.equal(kayit().birikimler[0].miktar, 2500);
+  assert.match(metin(window), /2,5 gram/);
+  assert.match(metin(window), /15\.000,00 TL/);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.equal(document.getElementById('birikim-deger').textContent, '15.000,00 TL');
+  dugme('Ana sayfa').click();
+  assert.equal(document.getElementById('ana-para').textContent, '35.000,00 TL');
+  assert.match(metin(window), /Piyasa kapalı|Güncel/);
+  dugme('Harcamalar').click();
+  assert.match(metin(window), /Bu dönem0,00 TL/);
+
+  dugme('Birikim').click();
+  [...document.querySelectorAll('button.varlik')][0].click();
+  dugme('Sattım').click();
+  document.getElementById('miktar').value = '3';
+  document.getElementById('tutar').value = '20.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Daha fazlası satılamaz/);
+  document.getElementById('miktar').value = '1';
+  document.getElementById('tutar').value = '6.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /1,5 gram/);
+  assert.match(metin(window), /yılında 2,5 gram aldın, 1 gram sattın/);
+
+  const sil = (ad) => [...document.querySelectorAll('.kalem')].find((k) => k.textContent.startsWith(ad)).querySelector('button').click();
+  sil('AAlış');
+  assert.match(metin(window), /sonrasında satış kaydı var/);
+  sil('SSatış');
+  sil('AAlış');
+  assert.deepEqual(kayit().birikimler, []);
+  assert.deepEqual(kayit().donemler[baslangic].hareketler, []);
+});
+
+test('eski birikim paradan düşmez, çeyrek küsuratlı yazılamaz', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100000 } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  dugme('Birikim').click();
+  dugme('+ Birikim ekle').click();
+  dugme('Çeyrek altın').click();
+  assert.match(metin(window), /Kaç adet/);
+  document.getElementById('miktar').value = '1,5';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Adet tam sayı/);
+  document.getElementById('miktar').value = '2';
+  document.getElementById('eski').click();
+  document.getElementById('tarih').value = '2024-03-01';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Mart 2024/);
+  assert.match(metin(window), /Paradan düşmedi/);
+  document.querySelector('[aria-label="Geri"]').click();
+  dugme('Ana sayfa').click();
+  assert.equal(document.getElementById('ana-para').textContent, '1.000,00 TL');
+});
+
+test('piyasa fiyatları gösterilir, kaynak bozulunca son fiyat kalır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  let bozuk = false;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100 } } }), (w) => {
+    w.fetch = async (adres) => {
+      if (bozuk && !adres.endsWith('tcmb.json')) throw new Error('bağlantı yok');
+      return fiyatCevabi(adres);
+    };
+  });
+  await new Promise((bitti) => setTimeout(bitti, 20));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  assert.match(metin(window), /43,0000/);
+  dugme('Piyasa').click();
+  assert.match(metin(window), /6\.100,00 TL/);
+  assert.match(metin(window), /Alış: 6\.000,00/);
+  assert.match(metin(window), /▼ %3,50/);
+  assert.match(metin(window), /Merkez Bankası kuru/);
+  assert.match(metin(window), /41,0000 TL/);
+  assert.match(metin(window), /Yaklaşık fiyat/);
+  assert.doesNotMatch(metin(window), /ONS/);
+
+  bozuk = true;
+  dugme('Yenile').click();
+  await new Promise((bitti) => setTimeout(bitti, 20));
+  assert.match(metin(window), /son bilinen fiyat/);
+  assert.match(metin(window), /6\.100,00 TL/);
 });

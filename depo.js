@@ -1,3 +1,5 @@
+import { TURLER } from './birikim.js';
+
 const ANAHTAR = 'cuzdan.v1';
 const TARIH = /^\d{4}-\d{2}-\d{2}$/;
 const AY = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -10,13 +12,17 @@ function taksitHareketi(h) {
   return h?.tur === 'taksit' && typeof h.taksitId === 'string' && AY.test(h.ay) && typeof h.ad === 'string';
 }
 
+function birikimHareketi(h) {
+  return (h?.tur === 'birikim' || h?.tur === 'satis') && typeof h.birikimId === 'string' && typeof h.ad === 'string';
+}
+
 function hareketlerGecerli(hareketler) {
   if (hareketler === undefined) return true;
   return (
     Array.isArray(hareketler) &&
     hareketler.every(
       (h) =>
-        (h?.tur === 'harcama' || h?.tur === 'gelir' || faturaHareketi(h) || taksitHareketi(h)) &&
+        (h?.tur === 'harcama' || h?.tur === 'gelir' || faturaHareketi(h) || taksitHareketi(h) || birikimHareketi(h)) &&
         TARIH.test(h.tarih) &&
         Number.isSafeInteger(h.kurus) &&
         h.kurus > 0 &&
@@ -53,6 +59,26 @@ function taksitlerGecerli(taksitler) {
         (t.sayi === undefined || (Number.isInteger(t.sayi) && t.sayi >= 1 && t.sayi <= 120)) &&
         (t.tur === 'degisken' || t.sayi !== undefined) &&
         (t.onceki === undefined || (Number.isSafeInteger(t.onceki) && t.onceki > 0 && t.onceki < t.toplam)),
+    )
+  );
+}
+
+function birikimlerGecerli(birikimler) {
+  if (birikimler === undefined) return true;
+  return (
+    Array.isArray(birikimler) &&
+    birikimler.every(
+      (b) =>
+        typeof b?.id === 'string' &&
+        b.id &&
+        Object.hasOwn(TURLER, b.tur) &&
+        (b.islem === 'alis' || b.islem === 'satis') &&
+        Number.isSafeInteger(b.miktar) &&
+        b.miktar > 0 &&
+        TARIH.test(b.tarih) &&
+        (b.kurus === undefined || (Number.isSafeInteger(b.kurus) && b.kurus > 0)) &&
+        (b.paradan === undefined || b.paradan === true) &&
+        (!b.paradan || b.kurus !== undefined),
     )
   );
 }
@@ -106,7 +132,7 @@ export function veriGecerliMi(veri) {
 
   if (!faturalarGecerli(veri.faturalar) || !kategorilerGecerli(veri.kategoriler)) return false;
   if (!ortakKisiGecerli(veri.ortakKisi) || !kategorilerGecerli(veri.kaynaklar)) return false;
-  if (!taksitlerGecerli(veri.taksitler)) return false;
+  if (!taksitlerGecerli(veri.taksitler) || !birikimlerGecerli(veri.birikimler)) return false;
   if (!veri.donemler || typeof veri.donemler !== 'object') return false;
   return Object.entries(veri.donemler).every(
     ([tarih, donem]) => TARIH.test(tarih) && Number.isSafeInteger(donem?.para) && hareketlerGecerli(donem.hareketler),

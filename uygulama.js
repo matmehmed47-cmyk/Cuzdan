@@ -59,12 +59,66 @@ import {
   siraliKategoriler,
   siraliKaynaklar,
 } from './harcama.js';
+import {
+  TURLER,
+  ayAlinanlar,
+  aylikOzet,
+  birikimEkle,
+  birikimSil,
+  bugunkuDeger,
+  eldeki,
+  kullanilanTurler,
+  miktarCoz,
+  miktarSayi,
+  miktarYaz,
+  satisEkle,
+  turKayitlari,
+  yillar,
+} from './birikim.js';
+import {
+  ALTINLAR,
+  DOVIZLER,
+  ELLE_YENILEME_SURESI,
+  KAYNAK,
+  KAYNAK_ADI,
+  TCMB_DOSYA,
+  YENILEME_SURESI,
+  fiyatCoz,
+  fiyatYaz,
+  piyasaDurumu,
+  piyasaKaydet,
+  piyasaYukle,
+  tcmbCoz,
+} from './piyasa.js';
+
+const IKONLAR = {
+  ev: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/>',
+  harcama: '<path d="M4 5h2.2l2 10.5h9.6l1.8-7.5H7"/><circle cx="9.5" cy="19.2" r="1.3"/><circle cx="17" cy="19.2" r="1.3"/>',
+  odeme: '<path d="M6 3.5h12v17l-3-1.8-3 1.8-3-1.8-3 1.8z"/><path d="M9.5 8.5h5"/><path d="M9.5 12.5h5"/>',
+  birikim: '<ellipse cx="12" cy="6.5" rx="7.5" ry="3"/><path d="M4.5 6.5v5.500c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6.5"/><path d="M4.5 12v5.500c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V12"/>',
+  piyasa: '<path d="M4 19.500h16"/><path d="m5 15 4.5-4.5 3.5 3 6-7"/><path d="M14.5 6.500H19V11"/>',
+  gelir: '<path d="M12 4v13"/><path d="m6.5 11.5 5.5 5.5 5.5-5.5"/><path d="M5 20.500h14"/>',
+  ortak: '<circle cx="9" cy="8.5" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M15.5 5.300a3.5 3.5 0 0 1 0 6.4"/><path d="M17.5 14.400c2.1.8 3.5 3 3.5 5.6"/>',
+  gecmis: '<path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4.500v4h4"/><path d="M12 8v4.500l3 1.8"/>',
+  ayar: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.900l.1.100a2 2 0 1 1-2.8 2.800l-.1-.1a1.7 1.7 0 0 0-2.9 1.200V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.200l-.1.1a2 2 0 1 1-2.8-2.800l.1-.1a1.7 1.7 0 0 0-1.2-2.900H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.900l-.1-.1a2 2 0 1 1 2.8-2.800l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.500V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.200l.1-.1a2 2 0 1 1 2.8 2.800l-.1.1a1.7 1.7 0 0 0 1.2 2.900h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  geri: '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
+  kalem: '<path d="M4 20l1-4.500L16.5 4l3.5 3.500L8.5 19z"/>',
+  yenile: '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.500h-4.5"/>',
+  dolar: '<circle cx="12" cy="12" r="8.5"/><path d="M15 9c-.5-1.2-1.7-1.8-3-1.8-1.7 0-3 .9-3 2.3 0 3.2 6 1.7 6 4.9 0 1.4-1.3 2.3-3 2.3-1.3 0-2.5-.6-3-1.8"/><path d="M12 5.500v13"/>',
+  cuzdan: '<path d="M4 7.500A2.5 2.5 0 0 1 6.5 5H17v3"/><path d="M4 7.500V17a2.5 2.5 0 0 0 2.5 2.500H20V8H6.5"/><circle cx="16" cy="13.8" r="1.1"/>',
+};
 
 const kok = document.getElementById('uygulama');
 let veri = null;
 let uyari = '';
 let kurulumTaslak = { adim: 1, ad: '', gun: null };
 let kurulumIstemi = null;
+let piyasaKaydi = null;
+let tcmbKur = null;
+let piyasaHata = false;
+let piyasaYukleniyor = false;
+let sonElleYenileme = 0;
+let canliEkran = null;
 
 function el(etiket, ozellikler = {}, ...cocuklar) {
   const dugum = document.createElement(etiket);
@@ -89,8 +143,39 @@ function tarihYaz(tarih) {
 }
 
 function goster(...dugumler) {
+  canliEkran = null;
+  kok.classList.remove('genis');
   kok.replaceChildren(...dugumler.flat(Infinity).filter(Boolean));
   window.scrollTo?.(0, 0);
+}
+
+function sayfa(sekme, ...dugumler) {
+  goster(...dugumler, altMenu(sekme));
+  kok.classList.add('genis');
+}
+
+function ikon(ad) {
+  return el('span', { sinif: 'ikon', 'aria-hidden': 'true', innerHTML: `<svg viewBox="0 0 24 24">${IKONLAR[ad]}</svg>` });
+}
+
+function altMenu(aktif) {
+  const sekmeler = [
+    ['ana', 'Ana sayfa', 'ev', anaEkran],
+    ['harcama', 'Harcamalar', 'harcama', () => harcamalarEkrani()],
+    ['odeme', 'Ödemeler', 'odeme', faturalarEkrani],
+    ['birikim', 'Birikim', 'birikim', birikimlerEkrani],
+    ['piyasa', 'Piyasa', 'piyasa', piyasaEkrani],
+  ];
+  return el(
+    'nav',
+    { sinif: 'alt-menu', 'aria-label': 'Ana menü' },
+    sekmeler.map(([kod, ad, simge, ac]) => el(
+      'button',
+      { type: 'button', onclick: ac, ...(kod === aktif ? { 'aria-current': 'page' } : {}) },
+      ikon(simge),
+      ad,
+    )),
+  );
 }
 
 function kaydetVeUyar(yeni) {
@@ -110,7 +195,7 @@ function hataGoster(satir, metin) {
 function tutarAlani(id, etiket, deger = '') {
   return [
     el('label', { htmlFor: id }, etiket),
-    el('input', { id, name: id, type: 'text', inputMode: 'decimal', autocomplete: 'off', placeholder: 'Örnek: 25.000', value: deger }),
+    el('input', { id, name: id, sinif: 'tutar-kutu', type: 'text', inputMode: 'decimal', autocomplete: 'off', placeholder: 'Örnek: 25.000', value: deger }),
   ];
 }
 
@@ -122,6 +207,32 @@ function gunSecici(id, secili) {
   return el('select', { id }, secenekler);
 }
 
+function ikiAlan(...alanlar) {
+  return el('div', { sinif: 'alanlar' }, alanlar.map((alan) => el('div', { sinif: 'alan' }, alan)));
+}
+
+function degerler(...ciftler) {
+  return el('div', { sinif: 'degerler' }, ciftler.filter(Boolean).map(([ad, deger]) => el('div', { sinif: 'deger' }, el('span', {}, ad), el('strong', {}, deger))));
+}
+
+function harfRengi(metin) {
+  return [...metin].reduce((t, h) => t + h.codePointAt(0), 0) % 6;
+}
+
+function kalem(baslik, tutar, alt, dugmeler = null, altSinif = 'ipucu') {
+  return el(
+    'div',
+    { sinif: 'kalem' },
+    el('span', { sinif: `harf renk${harfRengi(baslik)}`, 'aria-hidden': 'true' }, baslik.slice(0, 1).toLocaleUpperCase('tr-TR')),
+    el('div', { sinif: 'kalem-govde' }, satir(baslik, tutar), alt ? el('p', { sinif: altSinif }, alt) : null),
+    dugmeler ? el('div', { sinif: 'kalem-dugme' }, dugmeler) : null,
+  );
+}
+
+function kisaPara(kurus) {
+  return String(Math.round(kurus / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 function kisaAyNotu() {
   return el('p', { sinif: 'ipucu' }, 'Ay kısa çekerse maaş, ayın son günü sayılır.');
 }
@@ -130,7 +241,14 @@ function kisaAyNotu() {
 
 function kurulumEkrani() {
   const { adim } = kurulumTaslak;
-  const baslik = el('p', { sinif: 'adim' }, `Adım ${adim} / 3`);
+  const baslik = el(
+    'div',
+    { sinif: 'karsilama' },
+    ikon('cuzdan'),
+    el('h1', {}, 'Cüzdan'),
+    el('p', { sinif: 'adim' }, `Adım ${adim} / 3`),
+    el('div', { sinif: 'noktalar' }, [1, 2, 3].map((n) => el('span', { sinif: n <= adim ? 'dolu' : '' }))),
+  );
 
   if (adim === 1) {
     const hata = hataSatiri();
@@ -210,9 +328,9 @@ function ustBolum(baslik, geri) {
   return el(
     'header',
     { sinif: 'ust' },
-    geri ? el('button', { type: 'button', sinif: 'simge', 'aria-label': 'Geri', onclick: geri }, '‹') : null,
+    geri ? el('button', { type: 'button', sinif: 'simge', 'aria-label': 'Geri', onclick: geri }, ikon('geri')) : null,
     el('h1', {}, baslik),
-    geri ? null : el('button', { type: 'button', sinif: 'simge', 'aria-label': 'Ayarlar', onclick: ayarlarEkrani }, '⚙'),
+    geri ? null : el('button', { type: 'button', sinif: 'simge', 'aria-label': 'Ayarlar', onclick: ayarlarEkrani }, ikon('ayar')),
   );
 }
 
@@ -249,7 +367,7 @@ function yeniDonemEkrani(donem) {
   goster(
     ustBolum(veri.ad),
     bilgiSatiri(),
-    el('section', { sinif: 'kart vurgulu' }, el('h2', {}, 'Yeni ay, temiz sayfa'), el('p', {}, 'Yeni dönem başladı. Geçen dönem Geçmiş bölümünde duruyor.')),
+    el('section', { sinif: 'hero' }, el('h2', {}, 'Yeni ay, temiz sayfa'), el('p', { sinif: 'ipucu' }, 'Yeni dönem başladı. Geçen dönem Geçmiş bölümünde duruyor.')),
     form,
   );
 }
@@ -272,49 +390,81 @@ function anaEkran() {
   const ayrilan = ayrilanTutar(kalemler);
   const serbest = para - ayrilan;
   const [alt, ust] = yaklasikAralik(serbest);
-  goster(
+  const donemGunu = gunFarki(donem.baslangic, donem.sonraki);
+  sayfa(
+    'ana',
     ustBolum(veri.ad),
     bilgiSatiri(),
     el(
-      'section',
-      { sinif: 'kart vurgulu' },
-      el('p', { sinif: 'etiket' }, 'Serbest para'),
-      el('p', { sinif: 'tutar', id: 'ana-para' }, paraYaz(serbest)),
-      satir('Toplam para', paraYaz(para)),
-      satir('Ödemelere ayrıldı', paraYaz(ayrilan)),
-      belirsiz ? el('p', { sinif: 'ipucu' }, `${belirsiz} ödemenin tutarı henüz belli değil, hesaba katılmadı.`) : null,
-      el('button', { type: 'button', sinif: 'ikincil', onclick: () => paraDuzelt(donem, kayit) }, 'Tutarı düzelt'),
-    ),
-    el(
       'div',
-      { sinif: 'ikili' },
-      el('button', { type: 'button', onclick: () => harcamaFormu(donem) }, '+ Harcama'),
-      el('button', { type: 'button', onclick: () => gelirFormu(donem) }, '+ Gelir'),
+      { sinif: 'panel' },
+      el(
+        'div',
+        {},
+        el(
+          'section',
+          { sinif: 'hero' },
+          el(
+            'div',
+            { sinif: 'hero-ust' },
+            el('p', { sinif: 'etiket' }, 'Serbest para'),
+            el('button', { type: 'button', sinif: 'hayalet', onclick: () => paraDuzelt(donem, kayit) }, ikon('kalem'), 'Tutarı düzelt'),
+          ),
+          el('p', { sinif: 'tutar', id: 'ana-para' }, paraYaz(serbest)),
+          degerler(['Toplam para', paraYaz(para)], ['Ödemelere ayrıldı', paraYaz(ayrilan)]),
+          belirsiz ? el('p', { sinif: 'ipucu' }, `${belirsiz} ödemenin tutarı henüz belli değil, hesaba katılmadı.`) : null,
+          el('p', { sinif: 'ipucu' }, `Sonraki maaş: ${tarihYaz(donem.sonraki)} (${kalanGun} gün kaldı)`),
+          kategoriCubugu(donemGunu - kalanGun, donemGunu),
+        ),
+        el(
+          'div',
+          { sinif: 'ikili' },
+          el('button', { type: 'button', onclick: () => harcamaFormu(donem) }, '+ Harcama'),
+          el('button', { type: 'button', sinif: 'ikincil', onclick: () => gelirFormu(donem) }, '+ Gelir'),
+        ),
+        el(
+          'div',
+          { sinif: 'hizli' },
+          [
+            ['Gelirler', 'gelir', () => gelirlerEkrani()],
+            ['Ortak ev', 'ortak', () => ortakEkrani()],
+            ['Geçmiş dönemler', 'gecmis', gecmisEkrani],
+          ].map(([ad, simge, ac]) => el('button', { type: 'button', sinif: 'hizli-dugme', onclick: ac }, ikon(simge), ad)),
+        ),
+        el(
+          'section',
+          { sinif: 'kart' },
+          el('p', { sinif: 'etiket' }, 'Maaşa kadar'),
+          el('p', { sinif: 'kutu-buyuk' }, serbest < 0 ? `${paraYaz(-serbest)} eksidesin` : `Yaklaşık ${paraYaz(alt)} – ${paraYaz(ust)} kalıyor`),
+          el('p', { sinif: 'ipucu' }, `Bu dönem: ${tarihYaz(donem.baslangic)} – ${tarihYaz(donem.bitis)}`),
+        ),
+      ),
+      el(
+        'div',
+        {},
+        piyasaSeridi(),
+        birikimOzetKarti(),
+        el(
+          'section',
+          { sinif: 'kart' },
+          el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Yaklaşan ödemeler'), el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: faturalarEkrani }, 'Tümü')),
+          bekleyen.length
+            ? bekleyen.slice(0, 5).map((k) => kalemKutusu(k, donem, bugun, anaEkran))
+            : el('p', { sinif: 'ipucu' }, veri.faturalar?.length || veri.taksitler?.length ? 'Bu dönem bekleyen ödeme yok.' : 'Henüz ödeme eklemedin.'),
+          bekleyen.length > 5 ? el('p', { sinif: 'ipucu' }, `${bekleyen.length - 5} ödeme daha var.`) : null,
+        ),
+      ),
     ),
-    el(
-      'section',
-      { sinif: 'kart' },
-      el('p', { sinif: 'etiket' }, 'Maaşa kadar'),
-      el('p', {}, serbest < 0 ? `${paraYaz(-serbest)} eksidesin` : `Yaklaşık ${paraYaz(alt)} – ${paraYaz(ust)} kalıyor`),
-      el('p', { sinif: 'ipucu' }, `Sonraki maaş: ${tarihYaz(donem.sonraki)} (${kalanGun} gün kaldı)`),
-      el('p', { sinif: 'ipucu' }, `Bu dönem: ${tarihYaz(donem.baslangic)} – ${tarihYaz(donem.bitis)}`),
-    ),
-    el(
-      'section',
-      { sinif: 'kart' },
-      el('h2', {}, 'Yaklaşan ödemeler'),
-      bekleyen.length
-        ? bekleyen.slice(0, 5).map((k) => kalemKutusu(k, donem, bugun, anaEkran))
-        : el('p', { sinif: 'ipucu' }, veri.faturalar?.length || veri.taksitler?.length ? 'Bu dönem bekleyen ödeme yok.' : 'Henüz ödeme eklemedin.'),
-      bekleyen.length > 5 ? el('p', { sinif: 'ipucu' }, `${bekleyen.length - 5} ödeme daha var.`) : null,
-      el('button', { type: 'button', sinif: 'ikincil bosluk', onclick: faturalarEkrani }, 'Faturalar'),
-      el('button', { type: 'button', sinif: 'ikincil', onclick: taksitlerEkrani }, 'Taksitler'),
-    ),
-    el('button', { type: 'button', sinif: 'ikincil', onclick: () => harcamalarEkrani() }, 'Harcamalar'),
-    el('button', { type: 'button', sinif: 'ikincil', onclick: () => gelirlerEkrani() }, 'Gelirler'),
-    el('button', { type: 'button', sinif: 'ikincil', onclick: () => ortakEkrani() }, 'Ortak ev'),
-    el('button', { type: 'button', sinif: 'ikincil', onclick: gecmisEkrani }, 'Geçmiş dönemler'),
     el('p', { sinif: 'ipucu orta bosluk' }, 'Veriler şimdilik sadece bu cihazda duruyor.'),
+  );
+  canliEkran = anaEkran;
+}
+
+function odemeSekmeleri(aktif) {
+  return el(
+    'div',
+    { sinif: 'sekmeler' },
+    [['Faturalar', faturalarEkrani], ['Taksitler', taksitlerEkrani]].map(([ad, ac]) => el('button', { type: 'button', 'aria-pressed': String(ad === aktif), onclick: ac }, ad)),
   );
 }
 
@@ -328,40 +478,40 @@ function durumYazisi(kalem, bugun) {
   return kalan === 0 ? 'Bugün' : `${kalan} gün kaldı · ${tarihYaz(kalem.vade)}`;
 }
 
-function kalemKutusu(kalem, donem, bugun, geri, tamListe = false) {
+function kalemKutusu(odeme, donem, bugun, geri, tamListe = false) {
   const dugmeler = [];
-  if (bekliyorMu(kalem)) {
-    dugmeler.push(el('button', { type: 'button', onclick: () => (kalem.taksitId ? taksitOdeFormu(kalem, donem, geri) : odemeBaslat(kalem, donem, bugun, geri)) }, '✓ Ödedim'));
+  if (bekliyorMu(odeme)) {
+    dugmeler.push(el('button', { type: 'button', sinif: 'kucuk', onclick: () => (odeme.taksitId ? taksitOdeFormu(odeme, donem, geri) : odemeBaslat(odeme, donem, bugun, geri)) }, '✓ Ödedim'));
     if (tamListe) {
       dugmeler.push(el('button', {
         type: 'button',
-        sinif: 'ikincil',
+        sinif: 'ikincil kucuk',
         onclick: () => {
-          kaydetVeUyar(ayAtla(veri, kalem.faturaId, kalem.ay));
+          kaydetVeUyar(ayAtla(veri, odeme.faturaId, odeme.ay));
           geri();
         },
       }, 'Bu ay yok'));
     }
-  } else if (kalem.durum === 'atlandi' || kalem.geriAlinabilir) {
+  } else if (odeme.durum === 'atlandi' || odeme.geriAlinabilir) {
     dugmeler.push(el('button', {
       type: 'button',
-      sinif: 'ikincil',
+      sinif: 'ikincil kucuk',
       onclick: () => {
-        const yeni = kalem.durum === 'atlandi'
-          ? atlamaGeriAl(veri, kalem.faturaId, kalem.ay)
-          : odemeGeriAl(veri, donem.baslangic, kalem);
+        const yeni = odeme.durum === 'atlandi'
+          ? atlamaGeriAl(veri, odeme.faturaId, odeme.ay)
+          : odemeGeriAl(veri, donem.baslangic, odeme);
         kaydetVeUyar(yeni);
         geri();
       },
     }, 'Geri al'));
   }
 
-  return el(
-    'div',
-    { sinif: 'kalem' },
-    satir(kalem.ad, kalem.kurus === null ? 'Tutar belli değil' : paraYaz(kalem.kurus)),
-    el('p', { sinif: kalem.durum === 'gecikti' ? 'ipucu gecikti' : 'ipucu' }, durumYazisi(kalem, bugun)),
-    dugmeler.length ? el('div', { sinif: dugmeler.length > 1 ? 'ikili' : '' }, dugmeler) : null,
+  return kalem(
+    odeme.ad,
+    odeme.kurus === null ? 'Tutar belli değil' : paraYaz(odeme.kurus),
+    durumYazisi(odeme, bugun),
+    dugmeler.length ? dugmeler : null,
+    odeme.durum === 'gecikti' ? 'ipucu gecikti' : 'ipucu',
   );
 }
 
@@ -396,33 +546,38 @@ function faturalarEkrani() {
 
   const kalemler = donemKalemleri(veri, donem, bugun);
   const faturalar = veri.faturalar ?? [];
-  goster(
-    ustBolum('Faturalar', anaEkran),
+  sayfa(
+    'odeme',
+    ustBolum('Ödemeler'),
     bilgiSatiri(),
+    odemeSekmeleri('Faturalar'),
     el('button', { type: 'button', onclick: () => faturaFormu() }, '+ Fatura ekle'),
     el(
-      'section',
-      { sinif: 'kart bosluk' },
-      el('h2', {}, 'Bu dönem'),
-      kalemler.length
-        ? kalemler.map((k) => kalemKutusu(k, donem, bugun, faturalarEkrani, true))
-        : el('p', { sinif: 'ipucu' }, 'Bu dönem ödemesi olan fatura yok.'),
-      el('p', { sinif: 'ipucu bosluk' }, 'Ödenmeyen fatura sonraki döneme kendiliğinden geçer.'),
+      'div',
+      { sinif: 'panel bosluk' },
+      el(
+        'section',
+        { sinif: 'kart' },
+        el('h2', {}, 'Bu dönem'),
+        kalemler.length
+          ? kalemler.map((k) => kalemKutusu(k, donem, bugun, faturalarEkrani, true))
+          : el('p', { sinif: 'ipucu' }, 'Bu dönem ödemesi olan fatura yok.'),
+        el('p', { sinif: 'ipucu bosluk' }, 'Ödenmeyen fatura sonraki döneme kendiliğinden geçer.'),
+      ),
+      faturalar.length
+        ? el(
+            'section',
+            { sinif: 'kart' },
+            el('h2', {}, 'Kayıtlı faturalar'),
+            faturalar.map((f) => kalem(
+              f.ad,
+              f.kurus ? paraYaz(f.kurus) : 'Değişken',
+              `Ayın ${f.gun}. günü · ${f.tur === 'sabit' ? 'Sabit' : 'Değişken'}`,
+              el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => faturaFormu(f) }, 'Düzenle'),
+            )),
+          )
+        : null,
     ),
-    faturalar.length
-      ? el(
-          'section',
-          { sinif: 'kart' },
-          el('h2', {}, 'Kayıtlı faturalar'),
-          faturalar.map((f) => el(
-            'div',
-            { sinif: 'kalem' },
-            satir(f.ad, f.kurus ? paraYaz(f.kurus) : 'Değişken'),
-            el('p', { sinif: 'ipucu' }, `Ayın ${f.gun}. günü · ${f.tur === 'sabit' ? 'Sabit' : 'Değişken'}`),
-            el('button', { type: 'button', sinif: 'ikincil', onclick: () => faturaFormu(f) }, 'Düzenle'),
-          )),
-        )
-      : null,
   );
 }
 
@@ -433,8 +588,8 @@ function faturaFormu(mevcut = null) {
   const tur = el(
     'select',
     { id: 'tur', onchange: () => etiketYaz() },
-    el('option', { value: 'sabit', selected: mevcut?.tur !== 'degisken' }, 'Her ay aynı tutar (sabit)'),
-    el('option', { value: 'degisken', selected: mevcut?.tur === 'degisken' }, 'Tutar değişiyor (elektrik gibi)'),
+    el('option', { value: 'sabit', selected: mevcut?.tur !== 'degisken' }, 'Sabit tutar'),
+    el('option', { value: 'degisken', selected: mevcut?.tur === 'degisken' }, 'Değişken tutar'),
   );
   const gun = gunSecici('gun', mevcut?.gun);
   const [tutarEtiketi, tutarKutusu] = tutarAlani('tutar', 'Tutar', mevcut?.kurus ? paraYaz(mevcut.kurus) : '');
@@ -482,13 +637,10 @@ function faturaFormu(mevcut = null) {
     },
     el('label', { htmlFor: 'ad' }, 'Fatura adı'),
     el('input', { id: 'ad', name: 'ad', maxLength: 40, placeholder: 'Örnek: Elektrik', value: mevcut?.ad ?? '', autocomplete: 'off' }),
-    el('label', { htmlFor: 'tur' }, 'Tutarı nasıl?'),
-    tur,
     tutarEtiketi,
     tutarKutusu,
-    el('label', { htmlFor: 'gun' }, 'Son ödeme günü'),
-    gun,
-    el('p', { sinif: 'ipucu' }, 'Ay kısa çekerse ayın son günü sayılır.'),
+    ikiAlan([el('label', { htmlFor: 'tur' }, 'Tutarı nasıl?'), tur], [el('label', { htmlFor: 'gun' }, 'Son ödeme günü'), gun]),
+    el('p', { sinif: 'ipucu' }, 'Değişken: elektrik gibi her ay farklı gelen fatura. Ay kısa çekerse ayın son günü sayılır.'),
     gecikme,
     mevcut ? el('p', { sinif: 'ipucu' }, 'Değişiklik önceki ödemeleri etkilemez.') : null,
     hata,
@@ -546,9 +698,13 @@ function taksitKarti(taksit, donem, bugun) {
   return el(
     'section',
     { sinif: 'kart' },
-    satir(taksit.ad, taksit.sayi ? `${Math.min(durum.odenenAdet, taksit.sayi)}/${taksit.sayi}` : ''),
-    satir('Ödenen', paraYaz(durum.odenen)),
-    satir('Kalan', paraYaz(durum.kalan)),
+    el(
+      'div',
+      { sinif: 'bolum-baslik' },
+      el('h2', {}, taksit.ad),
+      taksit.sayi ? el('span', { sinif: 'rozet' }, `${Math.min(durum.odenenAdet, taksit.sayi)}/${taksit.sayi}`) : null,
+    ),
+    degerler(['Ödenen', paraYaz(durum.odenen)], ['Kalan', paraYaz(durum.kalan)]),
     kategoriCubugu(durum.odenen, taksit.toplam),
     durum.kalan === 0
       ? el('p', { sinif: 'ipucu' }, '✓ Tamamlandı')
@@ -556,10 +712,28 @@ function taksitKarti(taksit, donem, bugun) {
         ? el('p', { sinif: siradaki.durum === 'gecikti' ? 'ipucu gecikti' : 'ipucu' }, `${siradaki.durum === 'gecikti' ? 'Gecikti' : 'Sıradaki'}: ${siradaki.kurus === null ? 'Tutar sende' : paraYaz(siradaki.kurus)} · ${tarihYaz(siradaki.vade)}`)
         : null,
     bitis ? el('p', { sinif: 'ipucu' }, `${taksit.tur === 'sabit' ? 'Bitiş' : 'Tahmini bitiş'}: ${ayYaz(bitis)}`) : null,
-    siradaki && siradaki.vade <= donem.bitis
-      ? el('button', { type: 'button', onclick: () => taksitOdeFormu(siradaki, donem, taksitlerEkrani) }, '✓ Ödedim')
-      : null,
-    el('button', { type: 'button', sinif: 'ikincil', onclick: () => taksitDetayi(taksit.id) }, 'Ödeme geçmişi ve düzenle'),
+    el(
+      'div',
+      { sinif: 'kalem-dugme' },
+      siradaki && siradaki.vade <= donem.bitis
+        ? el('button', { type: 'button', sinif: 'kucuk', onclick: () => taksitOdeFormu(siradaki, donem, taksitlerEkrani) }, '✓ Ödedim')
+        : null,
+      el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => taksitDetayi(taksit.id) }, 'Ödeme geçmişi ve düzenle'),
+    ),
+  );
+}
+
+function aySutunu(ay, enBuyuk) {
+  const dolgu = el('span');
+  dolgu.style.height = `${enBuyuk ? Math.round((ay.kurus / enBuyuk) * 100) : 0}%`;
+  const [y, a] = ay.ay.split('-').map(Number);
+  const adi = new Intl.DateTimeFormat('tr-TR', { month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(y, a - 1, 1)));
+  return el(
+    'div',
+    { sinif: 'sutun', title: `${ayYaz(ay.ay)}: ${paraYaz(ay.kurus)}` },
+    el('strong', {}, kisaPara(ay.kurus)),
+    el('div', { sinif: 'sutun-kap' }, dolgu),
+    adi,
   );
 }
 
@@ -574,22 +748,23 @@ function taksitlerEkrani() {
   const tamam = taksitler.filter(biten);
   const aylar = gelecekAylar(veri, bugun);
   const enBuyuk = Math.max(...aylar.map((a) => a.kurus));
-  goster(
-    ustBolum('Taksitler', anaEkran),
+  sayfa(
+    'odeme',
+    ustBolum('Ödemeler'),
     bilgiSatiri(),
+    odemeSekmeleri('Taksitler'),
     el('button', { type: 'button', onclick: () => taksitFormu() }, '+ Taksit ekle'),
     devam.length
       ? el(
           'section',
-          { sinif: 'kart vurgulu bosluk' },
-          el('h2', {}, 'Önümüzdeki aylar'),
-          el('p', { sinif: 'ipucu' }, `Gelecek ay: ${paraYaz(aylar[1].kurus)}`),
-          aylar.map((a) => [satir(ayYaz(a.ay), paraYaz(a.kurus)), enBuyuk ? kategoriCubugu(a.kurus, enBuyuk) : null]),
+          { sinif: 'kart bosluk' },
+          el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Önümüzdeki aylar'), el('span', { sinif: 'rozet' }, `Gelecek ay: ${paraYaz(aylar[1].kurus)}`)),
+          el('div', { sinif: 'sutunlar' }, aylar.map((a) => aySutunu(a, enBuyuk))),
         )
       : el('p', { sinif: 'ipucu bosluk' }, 'Devam eden taksit yok.'),
-    devam.map((t) => taksitKarti(t, donem, bugun)),
-    tamam.length ? el('h2', { sinif: 'bosluk' }, 'Tamamlandı') : null,
-    tamam.map((t) => taksitKarti(t, donem, bugun)),
+    el('div', { sinif: 'kartlar' }, devam.map((t) => taksitKarti(t, donem, bugun))),
+    tamam.length ? el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Tamamlandı')) : null,
+    el('div', { sinif: 'kartlar' }, tamam.map((t) => taksitKarti(t, donem, bugun))),
   );
 }
 
@@ -606,14 +781,14 @@ function taksitDetayi(id) {
       el('h2', {}, 'Ödeme geçmişi'),
       taksit.onceki ? satir('Uygulamadan önce ödenen', paraYaz(taksit.onceki)) : null,
       odemeler.length
-        ? [...odemeler].reverse().map((h) => el(
-            'div',
-            { sinif: 'kalem' },
-            satir(tarihYaz(h.tarih), paraYaz(h.kurus)),
+        ? [...odemeler].reverse().map((h) => kalem(
+            tarihYaz(h.tarih),
+            paraYaz(h.kurus),
+            null,
             h.baslangic === donem.baslangic
               ? el('button', {
                   type: 'button',
-                  sinif: 'ikincil',
+                  sinif: 'ikincil kucuk',
                   onclick: () => {
                     kaydetVeUyar(taksitOdemeGeriAl(veri, h.baslangic, id, h.ay));
                     taksitDetayi(id);
@@ -634,8 +809,8 @@ function taksitFormu(mevcut = null) {
   const tur = el(
     'select',
     { id: 'tur' },
-    el('option', { value: 'sabit', selected: mevcut?.tur !== 'degisken' }, 'Her ay aynı tutar (sabit)'),
-    el('option', { value: 'degisken', selected: mevcut?.tur === 'degisken' }, 'Her ay farklı tutar (değişken)'),
+    el('option', { value: 'sabit', selected: mevcut?.tur !== 'degisken' }, 'Sabit'),
+    el('option', { value: 'degisken', selected: mevcut?.tur === 'degisken' }, 'Değişken'),
   );
   const gun = gunSecici('gun', mevcut?.gun);
   const form = el(
@@ -670,10 +845,11 @@ function taksitFormu(mevcut = null) {
     el('input', { id: 'ad', name: 'ad', maxLength: 40, placeholder: 'Örnek: Tablet', value: mevcut?.ad ?? '', autocomplete: 'off' }),
     tutarAlani('toplam', 'Toplam ödeyeceğin tutar', mevcut ? paraYaz(mevcut.toplam) : ''),
     el('p', { sinif: 'ipucu' }, 'Vade farkı varsa onu da ekle. Ürün fiyatını değil, toplam ödeyeceğin tutarı yaz.'),
-    el('label', { htmlFor: 'tur' }, 'Taksit tipi'),
-    tur,
-    el('label', { htmlFor: 'sayi' }, 'Taksit sayısı (değişkende boş bırakabilirsin)'),
-    el('input', { id: 'sayi', name: 'sayi', type: 'text', inputMode: 'numeric', autocomplete: 'off', placeholder: 'Örnek: 5', value: mevcut?.sayi ?? '' }),
+    ikiAlan(
+      [el('label', { htmlFor: 'tur' }, 'Taksit tipi'), tur],
+      [el('label', { htmlFor: 'sayi' }, 'Taksit sayısı'), el('input', { id: 'sayi', name: 'sayi', type: 'text', inputMode: 'numeric', autocomplete: 'off', placeholder: 'Örnek: 5', value: mevcut?.sayi ?? '' })],
+    ),
+    el('p', { sinif: 'ipucu' }, 'Sabitte tutarı uygulama hesaplar. Değişkende taksit sayısı boş kalabilir, her ödemede tutarı sen yazarsın.'),
     el('label', { htmlFor: 'gun' }, 'Her ayın ödeme günü'),
     gun,
     el('p', { sinif: 'ipucu' }, 'Ay kısa çekerse ayın son günü sayılır.'),
@@ -778,11 +954,11 @@ function harcamaFormu(donem, mevcut = null, geri = anaEkran, ortakBaslangic = fa
     secici.kutu,
     secici.yeniKutu,
     el('p', { sinif: 'ipucu' }, `Kategori seçmezsen “${DIGER}” sayılır.`),
-    el('label', { htmlFor: 'not' }, 'Not (isteğe bağlı)'),
-    notKutusu,
+    ikiAlan(
+      [el('label', { htmlFor: 'not' }, 'Not (isteğe bağlı)'), notKutusu],
+      [el('label', { htmlFor: 'tarih' }, 'Tarih'), el('input', { id: 'tarih', name: 'tarih', type: 'date', min: donem.baslangic, max: bugun, value: mevcut?.tarih ?? bugun })],
+    ),
     el('label', { sinif: 'secim', htmlFor: 'ortak' }, ortakKutusu, el('span', {}, 'Ortak ev için aldım')),
-    el('label', { htmlFor: 'tarih' }, 'Tarih'),
-    el('input', { id: 'tarih', name: 'tarih', type: 'date', min: donem.baslangic, max: bugun, value: mevcut?.tarih ?? bugun }),
     el('p', { sinif: 'ipucu' }, 'Sadece bu dönemin günleri seçilebilir.'),
     hata,
     el('button', { type: 'submit' }, 'Kaydet'),
@@ -818,40 +994,63 @@ function harcamalarEkrani(tarih = null) {
   const kayitlar = harcamaListesi(kayit);
   const toplamlar = kategoriToplamlari(kayit);
   const toplam = toplamlar.reduce((t, k) => t + k.kurus, 0);
-  goster(
-    ustBolum('Harcamalar', tarih ? gecmisEkrani : anaEkran),
+  const ac = tarih ? goster : (...dugumler) => sayfa('harcama', ...dugumler);
+  ac(
+    ustBolum('Harcamalar', tarih ? gecmisEkrani : null),
     bilgiSatiri(),
     el(
-      'section',
-      { sinif: 'kart vurgulu' },
-      el('p', { sinif: 'etiket' }, tarih ? `${tarihYaz(tarih)} dönemi` : 'Bu dönem'),
-      el('p', { sinif: 'tutar' }, paraYaz(toplam)),
-      el('p', { sinif: 'ipucu' }, 'Fatura ödemeleri bu toplama dahil değil.'),
-    ),
-    tarih ? null : el('button', { type: 'button', onclick: () => harcamaFormu(donem, null, yenile) }, '+ Harcama'),
-    toplamlar.length
-      ? el(
+      'div',
+      { sinif: 'panel' },
+      el(
+        'div',
+        {},
+        el(
           'section',
-          { sinif: 'kart bosluk' },
-          el('h2', {}, 'Kategoriler'),
-          toplamlar.map((k) => [satir(k.ad, paraYaz(k.kurus)), kategoriCubugu(k.kurus, toplam)]),
-        )
-      : null,
-    el(
-      'section',
-      { sinif: 'kart bosluk' },
-      el('h2', {}, 'Kayıtlar'),
-      kayitlar.length
-        ? kayitlar.map((h) => el(
-            'div',
-            { sinif: 'kalem' },
-            satir(h.kategori ?? DIGER, paraYaz(h.kurus)),
-            el('p', { sinif: 'ipucu' }, [h.ortak ? 'Ortak ev' : null, h.not, tarihYaz(h.tarih)].filter(Boolean).join(' · ')),
-            tarih ? null : el('button', { type: 'button', sinif: 'ikincil', onclick: () => harcamaFormu(donem, h, yenile) }, 'Düzenle'),
-          ))
-        : el('p', { sinif: 'ipucu' }, 'Henüz harcama yok.'),
+          { sinif: 'hero' },
+          el('p', { sinif: 'etiket' }, tarih ? `${tarihYaz(tarih)} dönemi` : 'Bu dönem'),
+          el('p', { sinif: 'tutar' }, paraYaz(toplam)),
+          el('p', { sinif: 'ipucu' }, 'Fatura ödemeleri bu toplama dahil değil.'),
+        ),
+        tarih ? null : el('button', { type: 'button', onclick: () => harcamaFormu(donem, null, yenile) }, '+ Harcama'),
+        toplamlar.length
+          ? el(
+              'section',
+              { sinif: 'kart bosluk' },
+              el(
+                'div',
+                { sinif: 'bolum-baslik' },
+                el('h2', {}, 'Kategoriler'),
+                tarih ? null : el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: kategorilerEkrani }, 'Kategorileri düzenle'),
+              ),
+              el(
+                'div',
+                { sinif: 'izgara' },
+                toplamlar.map((k) => el(
+                  'div',
+                  { sinif: 'mini' },
+                  el('p', { sinif: 'etiket' }, k.ad),
+                  el('p', { sinif: 'kutu-buyuk' }, paraYaz(k.kurus)),
+                  kategoriCubugu(k.kurus, toplam),
+                )),
+              ),
+            )
+          : null,
+      ),
+      el(
+        'section',
+        { sinif: 'kart' },
+        el('h2', {}, 'Kayıtlar'),
+        kayitlar.length
+          ? kayitlar.map((h) => kalem(
+              h.kategori ?? DIGER,
+              paraYaz(h.kurus),
+              [h.ortak ? 'Ortak ev' : null, h.not, tarihYaz(h.tarih)].filter(Boolean).join(' · '),
+              tarih ? null : el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => harcamaFormu(donem, h, yenile) }, 'Düzenle'),
+            ))
+          : el('p', { sinif: 'ipucu' }, 'Henüz harcama yok.'),
+        tarih || toplamlar.length ? null : el('button', { type: 'button', sinif: 'ikincil bosluk', onclick: kategorilerEkrani }, 'Kategorileri düzenle'),
+      ),
     ),
-    tarih ? null : el('button', { type: 'button', sinif: 'ikincil', onclick: kategorilerEkrani }, 'Kategorileri düzenle'),
   );
 }
 
@@ -879,25 +1078,18 @@ function kategorilerEkrani() {
     el(
       'section',
       { sinif: 'kart' },
-      kategoriler(veri).map((ad) => el(
-        'div',
-        { sinif: 'kalem' },
-        el('p', {}, el('strong', {}, ad)),
-        el(
-          'div',
-          { sinif: 'ikili' },
-          el('button', { type: 'button', sinif: 'ikincil', onclick: () => kategoriAdEkrani(ad) }, 'Ad değiştir'),
-          el('button', {
-            type: 'button',
-            sinif: 'tehlike',
-            onclick: () => {
-              if (!window.confirm(`“${ad}” silinsin mi? Eski kayıtlar bu adla kalır.`)) return;
-              kaydetVeUyar(kategoriSil(veri, ad));
-              kategorilerEkrani();
-            },
-          }, 'Sil'),
-        ),
-      )),
+      kategoriler(veri).map((ad) => kalem(ad, '', null, [
+        el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => kategoriAdEkrani(ad) }, 'Ad değiştir'),
+        el('button', {
+          type: 'button',
+          sinif: 'tehlike kucuk',
+          onclick: () => {
+            if (!window.confirm(`“${ad}” silinsin mi? Eski kayıtlar bu adla kalır.`)) return;
+            kaydetVeUyar(kategoriSil(veri, ad));
+            kategorilerEkrani();
+          },
+        }, 'Sil'),
+      ])),
     ),
     form,
   );
@@ -957,12 +1149,16 @@ function ortakEkrani(tarih = null) {
     bilgiSatiri(),
     el(
       'section',
-      { sinif: 'kart vurgulu' },
+      { sinif: 'hero' },
       el('p', { sinif: 'etiket' }, tarih ? `${tarihYaz(tarih)} dönemi` : 'Bu dönem ev için aldıkların'),
       el('p', { sinif: 'tutar', id: 'ortak-toplam' }, paraYaz(ozet.harcanan)),
-      ozet.kisiBasi !== null ? satir(`Kişi başı (${veri.ortakKisi} kişi)`, paraYaz(ozet.kisiBasi)) : null,
-      ozet.geriAlinan ? satir('Geri aldım', paraYaz(ozet.geriAlinan)) : null,
-      ozet.geriAlinan ? satir('Sende kalan masraf', paraYaz(ozet.kalan)) : null,
+      ozet.kisiBasi !== null || ozet.geriAlinan
+        ? degerler(
+            ozet.kisiBasi !== null ? [`Kişi başı (${veri.ortakKisi} kişi)`, paraYaz(ozet.kisiBasi)] : null,
+            ozet.geriAlinan ? ['Geri aldım', paraYaz(ozet.geriAlinan)] : null,
+            ozet.geriAlinan ? ['Sende kalan masraf', paraYaz(ozet.kalan)] : null,
+          )
+        : null,
       el('p', { sinif: 'ipucu' }, 'Bu liste sadece sende görünür. Tutarlar ana paradan düşer.'),
     ),
     tarih
@@ -978,12 +1174,11 @@ function ortakEkrani(tarih = null) {
       { sinif: 'kart' },
       el('h2', {}, 'Alınanlar'),
       liste.length
-        ? liste.map((h) => el(
-            'div',
-            { sinif: 'kalem' },
-            satir(h.not ?? h.kategori ?? DIGER, paraYaz(h.kurus)),
-            el('p', { sinif: 'ipucu' }, tarihYaz(h.tarih)),
-            tarih ? null : el('button', { type: 'button', sinif: 'ikincil', onclick: () => harcamaFormu(donem, h, yenile) }, 'Düzenle'),
+        ? liste.map((h) => kalem(
+            h.not ?? h.kategori ?? DIGER,
+            paraYaz(h.kurus),
+            tarihYaz(h.tarih),
+            tarih ? null : el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => harcamaFormu(donem, h, yenile) }, 'Düzenle'),
           ))
         : el('p', { sinif: 'ipucu' }, 'Henüz ortak harcama yok.'),
     ),
@@ -992,16 +1187,15 @@ function ortakEkrani(tarih = null) {
           'section',
           { sinif: 'kart' },
           el('h2', {}, 'Geri aldıkların'),
-          alinanlar.map((h) => el(
-            'div',
-            { sinif: 'kalem' },
-            satir(h.not ?? 'Geri aldım', paraYaz(h.kurus)),
-            el('p', { sinif: 'ipucu' }, tarihYaz(h.tarih)),
+          alinanlar.map((h) => kalem(
+            h.not ?? 'Geri aldım',
+            paraYaz(h.kurus),
+            tarihYaz(h.tarih),
             tarih
               ? null
               : el('button', {
                   type: 'button',
-                  sinif: 'tehlike',
+                  sinif: 'tehlike kucuk',
                   onclick: () => {
                     if (!window.confirm('Bu kayıt silinsin mi? Tutar paradan düşer.')) return;
                     kaydetVeUyar(hareketSil(veri, donem.baslangic, h.sira));
@@ -1080,10 +1274,10 @@ function gelirFormu(donem, mevcut = null, geri = anaEkran) {
     secici.kutu,
     secici.yeniKutu,
     el('p', { sinif: 'ipucu' }, `Seçmezsen “${EK_GELIR}” yazılır.`),
-    el('label', { htmlFor: 'not' }, 'Not (isteğe bağlı)'),
-    el('input', { id: 'not', name: 'not', maxLength: 80, placeholder: 'Örnek: 3 saat özel ders', value: mevcut?.not ?? '', autocomplete: 'off' }),
-    el('label', { htmlFor: 'tarih' }, 'Tarih'),
-    el('input', { id: 'tarih', name: 'tarih', type: 'date', min: donem.baslangic, max: bugun, value: mevcut?.tarih ?? bugun }),
+    ikiAlan(
+      [el('label', { htmlFor: 'not' }, 'Not (isteğe bağlı)'), el('input', { id: 'not', name: 'not', maxLength: 80, placeholder: 'Örnek: Özel ders', value: mevcut?.not ?? '', autocomplete: 'off' })],
+      [el('label', { htmlFor: 'tarih' }, 'Tarih'), el('input', { id: 'tarih', name: 'tarih', type: 'date', min: donem.baslangic, max: bugun, value: mevcut?.tarih ?? bugun })],
+    ),
     el('p', { sinif: 'ipucu' }, 'Bu tutar serbest paraya eklenir.'),
     hata,
     el('button', { type: 'submit' }, 'Kaydet'),
@@ -1117,11 +1311,10 @@ function gelirlerEkrani(tarih = null) {
     bilgiSatiri(),
     el(
       'section',
-      { sinif: 'kart vurgulu' },
-      el('p', { sinif: 'etiket' }, tarih ? `${tarihYaz(tarih)} dönemi` : 'Bu dönem'),
-      satir('Dönem başı parası', paraYaz(ozet.baslangic)),
-      satir(EK_GELIR, paraYaz(ozet.ekGelir)),
-      satir('Toplam', paraYaz(ozet.toplam)),
+      { sinif: 'hero' },
+      el('p', { sinif: 'etiket' }, tarih ? `${tarihYaz(tarih)} dönemi · Toplam` : 'Bu dönem · Toplam'),
+      el('p', { sinif: 'tutar' }, paraYaz(ozet.toplam)),
+      degerler(['Dönem başı parası', paraYaz(ozet.baslangic)], [EK_GELIR, paraYaz(ozet.ekGelir)]),
       el('p', { sinif: 'ipucu' }, 'Dönem başı parası, maaşla birlikte yazdığın tutardır.'),
     ),
     tarih ? null : el('button', { type: 'button', onclick: () => gelirFormu(donem, null, yenile) }, '+ Gelir'),
@@ -1130,12 +1323,11 @@ function gelirlerEkrani(tarih = null) {
       { sinif: 'kart bosluk' },
       el('h2', {}, 'Kayıtlar'),
       liste.length
-        ? liste.map((h) => el(
-            'div',
-            { sinif: 'kalem' },
-            satir(h.kaynak ?? EK_GELIR, paraYaz(h.kurus)),
-            el('p', { sinif: 'ipucu' }, [h.not, tarihYaz(h.tarih)].filter(Boolean).join(' · ')),
-            tarih ? null : el('button', { type: 'button', sinif: 'ikincil', onclick: () => gelirFormu(donem, h, yenile) }, 'Düzenle'),
+        ? liste.map((h) => kalem(
+            h.kaynak ?? EK_GELIR,
+            paraYaz(h.kurus),
+            [h.not, tarihYaz(h.tarih)].filter(Boolean).join(' · '),
+            tarih ? null : el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => gelirFormu(donem, h, yenile) }, 'Düzenle'),
           ))
         : el('p', { sinif: 'ipucu' }, 'Henüz ek gelir yok.'),
     ),
@@ -1151,22 +1343,30 @@ function gecmisEkrani() {
       'section',
       { sinif: 'kart' },
       el('h2', {}, `${tarihYaz(tarih)} dönemi`),
-      satir('Başlangıç parası', paraYaz(kayit.para)),
-      satir('Gelir', paraYaz(hareketToplami(kayit, 'gelir'))),
-      satir('Harcama', paraYaz(hareketToplami(kayit, 'harcama'))),
-      satir('Faturalar', paraYaz(hareketToplami(kayit, 'fatura'))),
-      satir('Taksitler', paraYaz(hareketToplami(kayit, 'taksit'))),
+      degerler(
+        ['Başlangıç parası', paraYaz(kayit.para)],
+        ['Dönem sonu', paraYaz(kalanPara(kayit))],
+        ['Gelir', paraYaz(hareketToplami(kayit, 'gelir'))],
+        ['Harcama', paraYaz(hareketToplami(kayit, 'harcama'))],
+        ['Faturalar', paraYaz(hareketToplami(kayit, 'fatura'))],
+        ['Taksitler', paraYaz(hareketToplami(kayit, 'taksit'))],
+        hareketToplami(kayit, 'birikim') ? ['Birikime gitti', paraYaz(hareketToplami(kayit, 'birikim'))] : null,
+        hareketToplami(kayit, 'satis') ? ['Birikim satışı', paraYaz(hareketToplami(kayit, 'satis'))] : null,
+      ),
       (kayit.hareketler ?? []).filter((h) => h.tur === 'fatura' || h.tur === 'taksit').map((h) => el('p', { sinif: 'ipucu' }, `✓ ${h.ad}: ${paraYaz(h.kurus)}`)),
-      satir('Dönem sonu', paraYaz(kalanPara(kayit))),
-      hareketToplami(kayit, 'harcama')
-        ? el('button', { type: 'button', sinif: 'ikincil bosluk', onclick: () => harcamalarEkrani(tarih) }, 'Harcamaları gör')
-        : null,
-      gelirListesi(kayit).length
-        ? el('button', { type: 'button', sinif: 'ikincil', onclick: () => gelirlerEkrani(tarih) }, 'Gelirleri gör')
-        : null,
-      ortakListesi(kayit).length
-        ? el('button', { type: 'button', sinif: 'ikincil', onclick: () => ortakEkrani(tarih) }, 'Ortak ev listesini gör')
-        : null,
+      el(
+        'div',
+        { sinif: 'kalem-dugme' },
+        hareketToplami(kayit, 'harcama')
+          ? el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => harcamalarEkrani(tarih) }, 'Harcamaları gör')
+          : null,
+        gelirListesi(kayit).length
+          ? el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => gelirlerEkrani(tarih) }, 'Gelirleri gör')
+          : null,
+        ortakListesi(kayit).length
+          ? el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => ortakEkrani(tarih) }, 'Ortak ev listesini gör')
+          : null,
+      ),
     );
   });
   const icerik = kartlar.length ? kartlar : [el('p', { sinif: 'ipucu' }, 'Henüz geçmiş dönem yok.')];
@@ -1201,6 +1401,412 @@ function paraDuzelt(donem, kayit) {
   goster(ustBolum('Tutarı düzelt', anaEkran), form);
 }
 
+/* Birikimlerim */
+
+function fiyatBul(kod) {
+  return piyasaKaydi?.fiyatlar[kod] ?? tcmbKur?.fiyatlar[kod] ?? null;
+}
+
+function degerBul(tur, miktar) {
+  const fiyat = fiyatBul(TURLER[tur].kod);
+  return fiyat ? bugunkuDeger(miktar, fiyat.alis) : null;
+}
+
+function toplamDeger() {
+  return kullanilanTurler(veri).reduce((t, tur) => t + (degerBul(tur, eldeki(veri, tur)) ?? 0), 0);
+}
+
+function birikimOzetKarti() {
+  const turler = kullanilanTurler(veri).filter((tur) => eldeki(veri, tur) > 0);
+  if (!turler.length) return null;
+  return el(
+    'button',
+    { type: 'button', sinif: 'varlik altin kart', onclick: birikimlerEkrani },
+    el('p', { sinif: 'etiket' }, 'Birikimlerin · bugünkü yaklaşık değer'),
+    el('p', { sinif: 'kutu-buyuk' }, paraYaz(toplamDeger())),
+    el('p', { sinif: 'ipucu' }, turler.slice(0, 3).map((tur) => (TURLER[tur].birim === 'adet' ? `${miktarSayi(eldeki(veri, tur))} ${TURLER[tur].ad.toLocaleLowerCase('tr-TR')}` : miktarYaz(eldeki(veri, tur), tur))).join(' · ')),
+  );
+}
+
+function birikimlerEkrani() {
+  const bugun = bugunTR();
+  const donem = donemBul(veri.ayar, bugun);
+  const kayit = veri.donemler[donem.baslangic];
+  if (!kayit) return anaEkran();
+
+  const turler = kullanilanTurler(veri);
+  const buAy = ayAlinanlar(veri, bugun.slice(0, 7));
+  const fiyatsiz = turler.some((tur) => eldeki(veri, tur) > 0 && !fiyatBul(TURLER[tur].kod));
+  sayfa(
+    'birikim',
+    ustBolum('Birikimlerim'),
+    bilgiSatiri(),
+    el(
+      'section',
+      { sinif: 'hero altin' },
+      el('p', { sinif: 'etiket' }, 'Bugünkü yaklaşık değer'),
+      el('p', { sinif: 'tutar', id: 'birikim-deger' }, paraYaz(toplamDeger())),
+      degerler(
+        ['Bu ay aldıkların', buAy.length ? buAy.map((k) => miktarYaz(k.miktar, k.tur)).join(', ') : 'Henüz yok'],
+        ['Bu dönem birikime gitti', paraYaz(hareketToplami(kayit, 'birikim'))],
+      ),
+      fiyatsiz ? el('p', { sinif: 'ipucu' }, 'Bazı fiyatlar alınamadı, toplama katılmadı.') : null,
+    ),
+    el('button', { type: 'button', onclick: () => birikimFormu() }, '+ Birikim ekle'),
+    turler.length
+      ? [
+          el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Neler var?')),
+          el(
+            'div',
+            { sinif: 'izgara' },
+            turler.map((tur) => {
+              const miktar = eldeki(veri, tur);
+              const deger = degerBul(tur, miktar);
+              return el(
+                'button',
+                { type: 'button', sinif: `varlik${TURLER[tur].altin ? ' altin' : ''}`, onclick: () => birikimDetayi(tur) },
+                ikon(TURLER[tur].altin ? 'birikim' : 'dolar'),
+                el('p', { sinif: 'etiket' }, TURLER[tur].ad),
+                el('p', { sinif: 'kutu-buyuk' }, miktarYaz(miktar, tur)),
+                el('p', { sinif: 'ipucu' }, deger === null ? 'Fiyat yok' : `≈ ${paraYaz(deger)}`),
+              );
+            }),
+          ),
+        ]
+      : el('p', { sinif: 'ipucu orta bosluk' }, 'Henüz birikim eklemedin. Eklediklerin hiç sıfırlanmaz, ay ay üstüne eklenir.'),
+    el('p', { sinif: 'ipucu orta bosluk' }, 'Değer, güncel alış fiyatıyla hesaplanan yaklaşık tutardır. Kuyumcu ve banka fiyatı farklı olabilir.'),
+  );
+  canliEkran = birikimlerEkrani;
+}
+
+function birikimDetayi(tur, yil = null) {
+  const bilgi = TURLER[tur];
+  const donem = donemBul(veri.ayar, bugunTR());
+  const miktar = eldeki(veri, tur);
+  const deger = degerBul(tur, miktar);
+  const secenekler = yillar(veri, tur);
+  const seciliYil = yil ?? secenekler[0];
+  const ozet = aylikOzet(veri, tur, seciliYil);
+  const satisVar = ozet.aylar.some((a) => a.satilan);
+  goster(
+    ustBolum(bilgi.ad, birikimlerEkrani),
+    bilgiSatiri(),
+    el(
+      'section',
+      { sinif: `hero${bilgi.altin ? ' altin' : ''}` },
+      el('p', { sinif: 'etiket' }, 'Toplam'),
+      el('p', { sinif: 'tutar' }, miktarYaz(miktar, tur)),
+      el('p', { sinif: 'ipucu' }, deger === null ? 'Güncel fiyat yok' : `Bugünkü yaklaşık değer: ${paraYaz(deger)}`),
+    ),
+    el(
+      'div',
+      { sinif: 'ikili' },
+      el('button', { type: 'button', onclick: () => birikimFormu(tur, () => birikimDetayi(tur)) }, '+ Ekle'),
+      el('button', { type: 'button', sinif: 'ikincil', disabled: miktar === 0, onclick: () => satisFormu(tur, donem) }, 'Sattım'),
+    ),
+    el(
+      'section',
+      { sinif: 'kart' },
+      el('h2', {}, 'Ay ay'),
+      secenekler.length > 1
+        ? el('div', { sinif: 'kategoriler' }, secenekler.map((y) => el('button', { type: 'button', sinif: 'cip', 'aria-pressed': String(y === seciliYil), onclick: () => birikimDetayi(tur, y) }, y)))
+        : null,
+      el(
+        'table',
+        { sinif: 'tablo bosluk' },
+        el('thead', {}, el('tr', {}, el('th', {}, 'Ay'), el('th', {}, 'Alınan'), satisVar ? el('th', {}, 'Satılan') : null, el('th', {}, 'Toplam'))),
+        el('tbody', {}, ozet.aylar.map((a) => el(
+          'tr',
+          {},
+          el('td', {}, ayYaz(a.ay)),
+          el('td', {}, a.alinan ? miktarSayi(a.alinan) : '–'),
+          satisVar ? el('td', {}, a.satilan ? miktarSayi(a.satilan) : '–') : null,
+          el('td', {}, miktarSayi(a.toplam)),
+        ))),
+      ),
+      el('p', { sinif: 'ipucu bosluk' }, `${seciliYil} yılında ${miktarYaz(ozet.alinan, tur)} aldın${ozet.satilan ? `, ${miktarYaz(ozet.satilan, tur)} sattın` : ''}.`),
+    ),
+    el(
+      'section',
+      { sinif: 'kart' },
+      el('h2', {}, 'Kayıtlar'),
+      turKayitlari(veri, tur).map((k) => kalem(
+        `${k.islem === 'satis' ? 'Satış' : 'Alış'}: ${miktarYaz(k.miktar, tur)}`,
+        k.kurus ? paraYaz(k.kurus) : '',
+        [tarihYaz(k.tarih), k.islem === 'alis' && !k.paradan ? 'Paradan düşmedi' : null].filter(Boolean).join(' · '),
+        el('button', {
+          type: 'button',
+          sinif: 'tehlike kucuk',
+          onclick: () => {
+            if (!window.confirm('Bu kayıt silinsin mi? Paraya işlendiyse o işlem de geri alınır.')) return;
+            const yeni = birikimSil(veri, k.id);
+            if (!yeni) {
+              uyari = 'Bu alış silinemez, çünkü sonrasında satış kaydı var. Önce satışı sil.';
+              return birikimDetayi(tur, seciliYil);
+            }
+            kaydetVeUyar(yeni);
+            return yeni.birikimler.some((b) => b.tur === tur) ? birikimDetayi(tur) : birikimlerEkrani();
+          },
+        }, 'Sil'),
+      )),
+    ),
+  );
+}
+
+function birikimKimligi() {
+  return `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function birikimFormu(ilkTur = 'gram', geri = birikimlerEkrani) {
+  const bugun = bugunTR();
+  const donem = donemBul(veri.ayar, bugun);
+  const hata = hataSatiri();
+  let tur = ilkTur;
+  const miktarEtiketi = el('label', { htmlFor: 'miktar' });
+  const fiyatNotu = el('p', { sinif: 'ipucu' });
+  const cipler = Object.entries(TURLER).map(([kod, bilgi]) => el('button', {
+    type: 'button',
+    sinif: 'cip',
+    'aria-pressed': String(kod === tur),
+    'data-tur': kod,
+    onclick: () => {
+      tur = kod;
+      turYaz();
+    },
+  }, bilgi.ad));
+  const eskiKutu = el('input', { id: 'eski', type: 'checkbox', onchange: () => eskiYaz() });
+  const tarihKutu = el('input', { id: 'tarih', name: 'tarih', type: 'date', max: bugun, value: bugun });
+  const [tutarEtiketi, tutarKutusu] = tutarAlani('tutar', 'Ödediğin tutar');
+  const tarihNotu = el('p', { sinif: 'ipucu' });
+
+  function turYaz() {
+    const { birim, kod } = TURLER[tur];
+    for (const cip of cipler) cip.setAttribute('aria-pressed', String(cip.dataset.tur === tur));
+    miktarEtiketi.textContent = birim === 'adet' ? 'Kaç adet?' : `Kaç ${birim}?`;
+    const fiyat = fiyatBul(kod);
+    fiyatNotu.textContent = fiyat ? `Şu anki satış fiyatı: ${fiyatYaz(fiyat.satis, kod === 'USD' || kod === 'EUR' ? 4 : 2)} TL` : '';
+  }
+
+  function eskiYaz() {
+    tutarEtiketi.textContent = eskiKutu.checked ? 'Ödediğin tutar (bilmiyorsan boş bırak)' : 'Ödediğin tutar';
+    tarihKutu.min = eskiKutu.checked ? '' : donem.baslangic;
+    tarihNotu.textContent = eskiKutu.checked ? 'Eski birikim paranı değiştirmez, sadece listeye eklenir.' : 'Tutar paradan düşer, harcama sayılmaz. Tarih bu dönemden olmalı.';
+  }
+
+  turYaz();
+  eskiYaz();
+
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const miktar = miktarCoz(form.elements.miktar.value, tur);
+        if (miktar === null) {
+          return hataGoster(hata, TURLER[tur].ondalik ? 'Sıfırdan büyük bir miktar yaz. Örnek: 2,5' : 'Adet tam sayı olmalı. Örnek: 2');
+        }
+        const yazilan = tutarKutusu.value.trim();
+        const kurus = yazilan ? paraCoz(yazilan) : undefined;
+        if (kurus === null || kurus === 0 || (!eskiKutu.checked && kurus === undefined)) {
+          return hataGoster(hata, 'Ödediğin tutarı yaz. Örnek: 15.000');
+        }
+        const tarih = tarihKutu.value;
+        if (!tarih || tarih > bugun || (!eskiKutu.checked && tarih < donem.baslangic)) {
+          return hataGoster(hata, eskiKutu.checked ? 'Tarih bugünden ileri olamaz.' : `Tarih ${tarihYaz(donem.baslangic)} ile bugün arasında olmalı.`);
+        }
+        kaydetVeUyar(birikimEkle(veri, eskiKutu.checked ? null : donem.baslangic, { id: birikimKimligi(), tur, miktar, kurus, tarih }));
+        birikimDetayi(tur);
+      },
+    },
+    el('p', { sinif: 'etiket' }, 'Ne aldın?'),
+    el('div', { sinif: 'kategoriler' }, cipler),
+    ikiAlan(
+      [miktarEtiketi, el('input', { id: 'miktar', name: 'miktar', sinif: 'tutar-kutu', type: 'text', inputMode: 'decimal', autocomplete: 'off', placeholder: 'Örnek: 3' })],
+      [el('label', { htmlFor: 'tarih' }, 'Tarih'), tarihKutu],
+    ),
+    fiyatNotu,
+    tutarEtiketi,
+    tutarKutusu,
+    el('label', { sinif: 'secim', htmlFor: 'eski' }, eskiKutu, el('span', {}, 'Paradan düşme (eski birikim)')),
+    tarihNotu,
+    hata,
+    el('button', { type: 'submit' }, 'Kaydet'),
+  );
+  goster(ustBolum('Birikim ekle', geri), form);
+}
+
+function satisFormu(tur, donem) {
+  const bugun = bugunTR();
+  const elde = eldeki(veri, tur);
+  const hata = hataSatiri();
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const miktar = miktarCoz(form.elements.miktar.value, tur);
+        if (miktar === null) return hataGoster(hata, TURLER[tur].ondalik ? 'Sıfırdan büyük bir miktar yaz. Örnek: 2,5' : 'Adet tam sayı olmalı. Örnek: 2');
+        if (miktar > elde) return hataGoster(hata, `Elinde ${miktarYaz(elde, tur)} var. Daha fazlası satılamaz.`);
+        const kurus = paraCoz(form.elements.tutar.value);
+        if (!kurus) return hataGoster(hata, 'Eline geçen tutarı yaz. Örnek: 15.000');
+        const tarih = form.elements.tarih.value;
+        if (!tarih || tarih < donem.baslangic || tarih > bugun) {
+          return hataGoster(hata, `Tarih ${tarihYaz(donem.baslangic)} ile bugün arasında olmalı.`);
+        }
+        kaydetVeUyar(satisEkle(veri, donem.baslangic, { id: birikimKimligi(), tur, miktar, kurus, tarih }));
+        birikimDetayi(tur);
+      },
+    },
+    ikiAlan(
+      [el('label', { htmlFor: 'miktar' }, TURLER[tur].birim === 'adet' ? 'Kaç adet sattın?' : `Kaç ${TURLER[tur].birim} sattın?`), el('input', { id: 'miktar', name: 'miktar', sinif: 'tutar-kutu', type: 'text', inputMode: 'decimal', autocomplete: 'off' })],
+      [el('label', { htmlFor: 'tarih' }, 'Tarih'), el('input', { id: 'tarih', name: 'tarih', type: 'date', min: donem.baslangic, max: bugun, value: bugun })],
+    ),
+    el('p', { sinif: 'ipucu' }, `Elinde ${miktarYaz(elde, tur)} var.`),
+    tutarAlani('tutar', 'Eline geçen tutar'),
+    el('p', { sinif: 'ipucu' }, 'Bu tutar serbest paraya eklenir.'),
+    hata,
+    el('button', { type: 'submit' }, 'Kaydet'),
+  );
+  goster(ustBolum(`${TURLER[tur].ad} sattım`, () => birikimDetayi(tur)), form);
+}
+
+/* Piyasa */
+
+function dovizMi(kod) {
+  return DOVIZLER.some((d) => d.kod === kod);
+}
+
+function durumSatiri() {
+  const durum = piyasaDurumu(piyasaKaydi, Date.now(), bugunTR());
+  if (durum === 'yok') return el('p', { sinif: 'durum' }, piyasaHata ? 'Fiyat alınamadı' : 'Fiyatlar bekleniyor');
+  const zaman = piyasaKaydi.tarih === bugunTR() ? piyasaKaydi.saat : `${tarihYaz(piyasaKaydi.tarih)} ${piyasaKaydi.saat}`;
+  const metin = { guncel: `Güncel · ${zaman}`, kapali: `Piyasa kapalı · Son fiyat ${zaman}`, eski: `Son fiyat · ${zaman}` }[durum];
+  return el('p', { sinif: `durum${durum === 'guncel' ? ' guncel' : ''}` }, metin);
+}
+
+function degisimYazisi(fiyat) {
+  if (fiyat.degisim === null) return null;
+  const yon = fiyat.degisim > 0 ? 'artis' : fiyat.degisim < 0 ? 'dusus' : '';
+  const isaret = fiyat.degisim > 0 ? '▲ ' : fiyat.degisim < 0 ? '▼ ' : '';
+  return el('p', { sinif: `degisim ${yon}` }, `${isaret}%${fiyatYaz(Math.abs(fiyat.degisim))}`);
+}
+
+function piyasaSeridi() {
+  return [
+    el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Piyasa'), durumSatiri()),
+    el(
+      'div',
+      { sinif: 'serit' },
+      [...DOVIZLER, ...ALTINLAR.slice(0, 2)].map(({ kod, ad }) => {
+        const fiyat = fiyatBul(kod);
+        return el(
+          'button',
+          { type: 'button', sinif: 'varlik', 'aria-label': `${ad} fiyatı`, onclick: piyasaEkrani },
+          el('p', { sinif: 'etiket' }, ad),
+          el('p', { sinif: 'fiyat' }, fiyat ? fiyatYaz(fiyat.satis, dovizMi(kod) ? 4 : 2) : '–'),
+          fiyat ? degisimYazisi(fiyat) : null,
+        );
+      }),
+    ),
+  ];
+}
+
+function fiyatKarti({ kod, ad }) {
+  const fiyat = piyasaKaydi?.fiyatlar[kod] ?? null;
+  const ondalik = dovizMi(kod) ? 4 : 2;
+  return el(
+    'div',
+    { sinif: 'kart' },
+    el('p', { sinif: 'etiket' }, ad),
+    el('p', { sinif: 'fiyat' }, fiyat ? `${fiyatYaz(fiyat.satis, ondalik)} TL` : '–'),
+    fiyat ? el('p', { sinif: 'ipucu' }, `Alış: ${fiyatYaz(fiyat.alis, ondalik)}`) : null,
+    fiyat ? degisimYazisi(fiyat) : null,
+  );
+}
+
+function piyasaEkrani() {
+  sayfa(
+    'piyasa',
+    ustBolum('Piyasa'),
+    el(
+      'div',
+      { sinif: 'bolum-baslik' },
+      durumSatiri(),
+      el('button', {
+        type: 'button',
+        sinif: 'ikincil kucuk',
+        disabled: piyasaYukleniyor,
+        onclick: () => {
+          if (Date.now() - sonElleYenileme < ELLE_YENILEME_SURESI) return;
+          sonElleYenileme = Date.now();
+          piyasaYenile();
+        },
+      }, ikon('yenile'), piyasaYukleniyor ? 'Yenileniyor' : 'Yenile'),
+    ),
+    piyasaHata && piyasaKaydi ? el('p', { sinif: 'ipucu', role: 'status' }, 'Yeni fiyat alınamadı, son bilinen fiyat gösteriliyor.') : null,
+    el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Döviz')),
+    el('div', { sinif: 'izgara' }, DOVIZLER.map(fiyatKarti)),
+    el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Altın')),
+    el('div', { sinif: 'izgara' }, ALTINLAR.map(fiyatKarti)),
+    tcmbKur
+      ? el(
+          'section',
+          { sinif: 'kart bosluk' },
+          el('h2', {}, 'Merkez Bankası kuru'),
+          degerler(...DOVIZLER.filter(({ kod }) => tcmbKur.fiyatlar[kod]).map(({ kod, ad }) => [ad, `${fiyatYaz(tcmbKur.fiyatlar[kod].satis, 4)} TL`])),
+          el('p', { sinif: 'ipucu' }, `Resmî döviz satış kuru · ${tarihYaz(tcmbKur.tarih)}. Günde bir açıklanır.`),
+        )
+      : null,
+    el('p', { sinif: 'ipucu orta bosluk' }, `Büyük yazılan satış fiyatıdır. Yaklaşık fiyattır, 5 dakikada bir yenilenir. Banka, döviz bürosu ve kuyumcu fiyatları farklı olabilir. Kaynak: ${KAYNAK_ADI}.`),
+  );
+  canliEkran = piyasaEkrani;
+}
+
+function canliTazele() {
+  if (!canliEkran) return;
+  const konum = window.scrollY ?? 0;
+  canliEkran();
+  window.scrollTo?.(0, konum);
+}
+
+async function jsonGetir(adres) {
+  const denetim = new AbortController();
+  const sure = setTimeout(() => denetim.abort(), 10000);
+  try {
+    const cevap = await window.fetch(adres, { cache: 'no-store', signal: denetim.signal });
+    if (!cevap.ok) throw new Error(String(cevap.status));
+    return await cevap.json();
+  } finally {
+    clearTimeout(sure);
+  }
+}
+
+async function piyasaYenile() {
+  if (!window.fetch || piyasaYukleniyor) return;
+  piyasaYukleniyor = true;
+  canliTazele();
+  const [asil, resmi] = await Promise.allSettled([jsonGetir(KAYNAK), jsonGetir(TCMB_DOSYA)]);
+  const fiyatlar = asil.status === 'fulfilled' ? fiyatCoz(asil.value) : null;
+  const kur = resmi.status === 'fulfilled' ? tcmbCoz(resmi.value) : null;
+  if (kur) tcmbKur = kur;
+  if (fiyatlar) piyasaKaydi = { ...fiyatlar, alindi: Date.now() };
+  piyasaHata = !fiyatlar;
+  if (piyasaKaydi) piyasaKaydet({ ...piyasaKaydi, tcmb: tcmbKur });
+  piyasaYukleniyor = false;
+  canliTazele();
+}
+
+function piyasaBaslat() {
+  piyasaKaydi = piyasaYukle();
+  tcmbKur = piyasaKaydi?.tcmb ?? null;
+  if (!window.fetch) return;
+  piyasaYenile();
+  const sayac = setInterval(() => {
+    if (document.visibilityState !== 'hidden') piyasaYenile();
+  }, YENILEME_SURESI);
+  sayac.unref?.();
+}
+
 /* Ayarlar */
 
 function ayarlarEkrani() {
@@ -1220,15 +1826,23 @@ function ayarlarEkrani() {
       { sinif: 'kart' },
       el('h2', {}, 'Maaş'),
       el('p', { sinif: 'ipucu' }, `Normal maaş günü: ayın ${son.gun}. günü`),
-      el('button', { type: 'button', sinif: 'ikincil', onclick: maasGunuEkrani }, 'Maaş gününü değiştir'),
-      el('button', { type: 'button', sinif: 'ikincil', onclick: () => kaydirmaEkrani(bugun) }, 'Sadece sıradaki maaş farklı günde'),
+      el(
+        'div',
+        { sinif: 'ikili' },
+        el('button', { type: 'button', sinif: 'ikincil', onclick: maasGunuEkrani }, 'Maaş gününü değiştir'),
+        el('button', { type: 'button', sinif: 'ikincil', onclick: () => kaydirmaEkrani(bugun) }, 'Sadece sıradaki maaş farklı günde'),
+      ),
     ),
     el(
       'section',
       { sinif: 'kart' },
       el('h2', {}, 'Yedek'),
-      el('button', { type: 'button', sinif: 'ikincil', onclick: yedekIndir }, 'Yedeği indir'),
-      el('label', { sinif: 'dosya' }, 'Yedekten yükle', el('input', { type: 'file', accept: 'application/json,.json', onchange: yedekYukle })),
+      el(
+        'div',
+        { sinif: 'ikili' },
+        el('button', { type: 'button', sinif: 'ikincil', onclick: yedekIndir }, 'Yedeği indir'),
+        el('label', { sinif: 'dosya' }, 'Yedekten yükle', el('input', { type: 'file', accept: 'application/json,.json', onchange: yedekYukle })),
+      ),
     ),
     el(
       'section',
@@ -1402,6 +2016,7 @@ function baslat() {
     );
   }
   veri = kayitli;
+  piyasaBaslat();
   return veri ? anaEkran() : kurulumEkrani();
 }
 
@@ -1411,7 +2026,9 @@ window.addEventListener('beforeinstallprompt', (olay) => {
 });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && kok.querySelector('#ana-para')) anaEkran();
+  if (document.visibilityState !== 'visible') return;
+  if (kok.querySelector('#ana-para')) anaEkran();
+  if (Date.now() - (piyasaKaydi?.alindi ?? 0) > YENILEME_SURESI) piyasaYenile();
 });
 
 if ('serviceWorker' in navigator) {
