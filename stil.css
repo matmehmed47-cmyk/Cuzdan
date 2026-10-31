@@ -1770,3 +1770,36 @@ button.renk-kutu[aria-pressed="true"] {
     stroke-dashoffset: 0;
   }
 }
+
+/* Çevirici */
+
+.cevirici {
+  display: grid;
+  gap: 8px;
+}
+
+.cevirici > * {
+  margin-bottom: 0;
+}
+
+.cevirici-satir {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+button.cevirici-yon {
+  justify-self: center;
+  width: 46px;
+  min-height: 42px;
+  font-size: 1.2rem;
+}
+
+.cevirici-sonuc {
+  margin: 0 0 4px;
+  font-size: clamp(1.5rem, 7vw, 1.9rem);
+  font-weight: 750;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}

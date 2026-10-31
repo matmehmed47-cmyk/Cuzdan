@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-25';
+const SURUM = 'cuzdan-26';
 const BILDIRIM = 'cuzdan-bildirim';
 const EN_ESKI = 2 * 24 * 60 * 60 * 1000;
 const DOSYALAR = [
@@ -24,6 +24,7 @@ const DOSYALAR = [
   './hareket.js',
   './imza.js',
   './acilis.js',
+  './cevirici.js',
   './sesler.js',
   './ses/acilis.mp3',
   './ses/kazanc.mp3',

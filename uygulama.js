@@ -111,6 +111,7 @@ import { GRUPLAR, girenMi, gunlereAyir, hareketListesi, hareketToplamlari } from
 import { acilisGoster } from './acilis.js';
 import { sesAyarla, sesCal } from './sesler.js';
 import { imzaSvg } from './imza.js';
+import { BIRIMLER, birimBul, cevir, gerekli } from './cevirici.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
 import { konusmaCoz } from './ses.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
@@ -123,8 +124,8 @@ import {
   TCMB_DOSYA,
   YENILEME_SURESI,
   fiyatCoz,
+  fiyatDegistiMi,
   fiyatYaz,
-  neAlir,
   piyasaDurumu,
   piyasaKaydet,
   piyasaYukle,
@@ -2131,9 +2132,16 @@ function dovizMi(kod) {
 function durumSatiri() {
   const durum = piyasaDurumu(piyasaKaydi, Date.now(), bugunTR());
   if (durum === 'yok') return el('p', { sinif: 'durum' }, piyasaHata ? 'Fiyat alınamadı' : 'Fiyatlar bekleniyor');
-  const zaman = piyasaKaydi.tarih === bugunTR() ? piyasaKaydi.saat : `${tarihYaz(piyasaKaydi.tarih)} ${piyasaKaydi.saat}`;
+  const zaman = fiyatZamani();
   const metin = { guncel: `Güncel · ${zaman}`, kapali: `Piyasa kapalı · Son fiyat ${zaman}`, eski: `Son fiyat · ${zaman}` }[durum];
   return el('p', { sinif: `durum${durum === 'guncel' ? ' guncel' : ''}` }, metin);
+}
+
+function fiyatZamani() {
+  if (!piyasaKaydi.degisti) return piyasaKaydi.tarih === bugunTR() ? piyasaKaydi.saat : `${tarihYaz(piyasaKaydi.tarih)} ${piyasaKaydi.saat}`;
+  const saat = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' }).format(piyasaKaydi.degisti);
+  const gun = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(piyasaKaydi.degisti);
+  return gun === bugunTR() ? saat : `${tarihYaz(gun)} ${saat}`;
 }
 
 function degisimYazisi(fiyat) {
@@ -2196,7 +2204,7 @@ function piyasaEkrani() {
       }, ikon('yenile'), piyasaYukleniyor ? 'Yenileniyor' : 'Yenile'),
     ),
     piyasaHata && piyasaKaydi ? el('p', { sinif: 'ipucu', role: 'status' }, 'Yeni fiyat alınamadı, son bilinen fiyat gösteriliyor.') : null,
-    el('button', { type: 'button', onclick: paramNeAlirEkrani }, 'Param ne alır?'),
+    ceviriciKarti(),
     el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Döviz')),
     el('div', { sinif: 'izgara' }, DOVIZLER.map(fiyatKarti)),
     el('div', { sinif: 'bolum-baslik' }, el('h2', {}, 'Altın')),
@@ -2219,66 +2227,130 @@ function serbestPara(donem, kayit, bugun) {
   return kalanPara(kayit) - ayrilanTutar([...donemKalemleri(veri, donem, bugun), ...donemTaksitleri(veri, donem, bugun)]) - kenardaPara(veri);
 }
 
-function paramNeAlirEkrani() {
-  const bugun = bugunTR();
-  const donem = donemBul(veri.ayar, bugun);
-  const kayit = veri.donemler[donem.baslangic];
-  if (!kayit) return anaEkran();
+const cevirici = { miktar: '', kaynak: 'USD', hedef: 'TL' };
+let ceviriciYaz = null;
 
-  const serbest = serbestPara(donem, kayit, bugun);
-  const kalemler = [
-    ['USD', 'Dolar', (m) => `${fiyatYaz(m)} dolar`],
-    ['EUR', 'Euro', (m) => `${fiyatYaz(m)} euro`],
-    ['GRA', 'Gram altın', (m) => `${fiyatYaz(m)} gram`],
-    ['CEYREKALTIN', 'Çeyrek altın', (m) => `${Math.floor(m)} adet`],
-    ['YARIMALTIN', 'Yarım altın', (m) => `${Math.floor(m)} adet`],
-    ['TAMALTIN', 'Tam altın', (m) => `${Math.floor(m)} adet`],
+function birimSecici(id, deger, degisince) {
+  return el('select', { id, 'aria-label': id === 'cevirici-kaynak' ? 'Elimdeki birim' : 'Almak istediğim birim', onchange: (o) => degisince(o.target.value) }, BIRIMLER.map((b) => el('option', { value: b.kod, selected: b.kod === deger }, b.ad)));
+}
+
+function miktarYazisi(sayi, birim) {
+  return `${fiyatYaz(sayi, birim.ondalik)} ${birim.yazi}`;
+}
+
+function fiyatSatiri(kod) {
+  const fiyat = kod === 'TL' ? null : fiyatBul(kod);
+  if (!fiyat) return null;
+  const ondalik = dovizMi(kod) ? 4 : 2;
+  return `${birimBul(kod).ad}: alış ${fiyatYaz(fiyat.alis, ondalik)} · satış ${fiyatYaz(fiyat.satis, ondalik)}`;
+}
+
+function sonucSatirlari(miktar) {
+  const kaynak = birimBul(cevirici.kaynak);
+  const hedef = birimBul(cevirici.hedef);
+  const gelen = cevir(miktar, kaynak.kod, hedef.kod, fiyatBul);
+  const giden = gerekli(miktar, kaynak.kod, hedef.kod, fiyatBul);
+  if (gelen === null) return [el('p', { sinif: 'ipucu' }, 'Fiyat yok, internete bağlanınca hesaplanır.')];
+  const yazi = miktarYazisi(miktar, kaynak);
+  const bozdurma = kaynak.kod === 'TL' ? `${yazi} ile alırsın` : `${yazi} bozdurursan`;
+  const ters = kaynak.kod === 'TL' ? `${yazi} elde etmek için bozduracağın` : `${yazi} almak için gereken`;
+  return [
+    el('p', { sinif: 'etiket' }, bozdurma),
+    el('p', { sinif: 'cevirici-sonuc', id: 'cevirici-sonuc' }, miktarYazisi(gelen, hedef)),
+    hedef.adetli ? el('p', { sinif: 'ipucu' }, `Tam adet olarak: ${Math.floor(gelen)}`) : null,
+    el('p', { sinif: 'ipucu' }, `${ters}: ${miktarYazisi(giden, hedef)}`),
+    [cevirici.kaynak, cevirici.hedef].map(fiyatSatiri).filter(Boolean).map((m) => el('p', { sinif: 'ipucu' }, m)),
   ];
-  const [etiket, kutu] = tutarAlani('tutar', 'Ne kadar paran var?');
-  const hata = hataSatiri();
-  const sonuc = el('div', { sinif: 'izgara bosluk', id: 'ne-alir' });
+}
 
-  function hesapla() {
-    const kurus = paraCoz(kutu.value);
-    hata.hidden = true;
-    if (kutu.value.trim() && !kurus) hataGoster(hata, 'Tutarı örnekteki gibi yaz: 25.000 ya da 1.250,50');
-    sonuc.replaceChildren(...(kurus ? kalemler : []).map(([kod, ad, yaz]) => {
-      const fiyat = fiyatBul(kod);
+function hepsiListesi(miktar) {
+  if (cevirici.kaynak !== 'TL') return null;
+  return el(
+    'div',
+    { sinif: 'izgara bosluk' },
+    BIRIMLER.filter((b) => b.kod !== 'TL').map((b) => {
+      const sonuc = cevir(miktar, 'TL', b.kod, fiyatBul);
       return el(
         'div',
         { sinif: 'mini' },
-        el('p', { sinif: 'etiket' }, ad),
-        el('p', { sinif: 'kutu-buyuk' }, fiyat ? yaz(neAlir(kurus, fiyat.satis)) : 'Fiyat yok'),
+        el('p', { sinif: 'etiket' }, b.ad),
+        el('p', { sinif: 'kutu-buyuk' }, sonuc === null ? 'Fiyat yok' : b.adetli ? `${Math.floor(sonuc)} adet` : miktarYazisi(sonuc, b)),
       );
-    }));
+    }),
+  );
+}
+
+function ceviriciKarti() {
+  const bugun = bugunTR();
+  const donem = donemBul(veri.ayar, bugun);
+  const kayit = veri.donemler[donem.baslangic];
+  const serbest = kayit ? serbestPara(donem, kayit, bugun) : 0;
+  const hata = hataSatiri();
+  const sonuc = el('div', { id: 'cevirici-alani' });
+  const kutu = el('input', {
+    id: 'cevirici-miktar',
+    sinif: 'tutar-kutu',
+    type: 'text',
+    inputMode: 'decimal',
+    autocomplete: 'off',
+    placeholder: 'Tutar',
+    'aria-label': 'Elimdeki tutar',
+    value: cevirici.miktar,
+    oninput: (o) => {
+      cevirici.miktar = o.target.value;
+      hesapla();
+    },
+  });
+
+  function hesapla() {
+    const kurus = paraCoz(cevirici.miktar);
+    hata.hidden = true;
+    if (cevirici.miktar.trim() && !kurus) hataGoster(hata, 'Tutarı örnekteki gibi yaz: 25.000 ya da 1.250,50');
+    sonuc.replaceChildren(...(kurus ? [sonucSatirlari(kurus / 100), hepsiListesi(kurus / 100)] : []).flat(Infinity).filter(Boolean));
   }
 
-  kutu.addEventListener('input', hesapla);
-  goster(
-    ustBolum('Param ne alır?', piyasaEkrani),
+  ceviriciYaz = hesapla;
+  const yeniden = (degisen) => {
+    Object.assign(cevirici, degisen);
+    piyasaEkrani();
+  };
+  const hizli = (tutar) => yeniden({ miktar: tutar });
+  hesapla();
+  return el(
+    'section',
+    { sinif: 'kart cevirici' },
+    el('h2', {}, 'Çevirici'),
+    el('label', { htmlFor: 'cevirici-miktar' }, 'Elimdeki'),
+    el('div', { sinif: 'cevirici-satir' }, kutu, birimSecici('cevirici-kaynak', cevirici.kaynak, (kod) => yeniden({ kaynak: kod }))),
+    el('button', {
+      type: 'button',
+      sinif: 'simge cevirici-yon',
+      'aria-label': 'Yönü değiştir',
+      onclick: () => yeniden({ kaynak: cevirici.hedef, hedef: cevirici.kaynak }),
+    }, '⇅'),
+    el('label', { htmlFor: 'cevirici-hedef' }, 'Almak istediğim'),
+    birimSecici('cevirici-hedef', cevirici.hedef, (kod) => yeniden({ hedef: kod })),
     el(
-      'form',
-      { onsubmit: (o) => o.preventDefault() },
-      etiket,
-      kutu,
-      hata,
-      el('button', {
-        type: 'button',
-        sinif: 'ikincil',
-        disabled: serbest <= 0,
-        onclick: () => {
-          kutu.value = paraYaz(serbest);
-          hesapla();
-        },
-      }, `Serbest paramı getir (${paraYaz(serbest)})`),
+      'div',
+      { sinif: 'kategoriler bosluk' },
+      ['100', '1.000', '10.000'].map((t) => el('button', { type: 'button', sinif: 'cip', onclick: () => hizli(t) }, t)),
+      serbest > 0
+        ? el('button', { type: 'button', sinif: 'cip', onclick: () => yeniden({ miktar: paraYaz(serbest), kaynak: 'TL', hedef: cevirici.hedef === 'TL' ? 'USD' : cevirici.hedef }) }, 'Serbest param')
+        : null,
     ),
-    sonuc,
-    el('p', { sinif: 'ipucu orta bosluk' }, 'Yaklaşık hesaptır, güncel satış fiyatı kullanılır. Banka, döviz bürosu ve kuyumcu fiyatları farklı olabilir.'),
+    hata,
+    el('div', { sinif: 'bosluk' }, sonuc),
+    el('p', { sinif: 'ipucu bosluk' }, 'Yaklaşık hesaptır, ekran fiyatı kullanılır. Banka, döviz bürosu ve kuyumcuda alış-satış farkı daha büyüktür. İşlemden önce o yerin fiyatını sor.'),
+    birimBul(cevirici.kaynak).kod.endsWith('ALTIN') || birimBul(cevirici.hedef).kod.endsWith('ALTIN') || [cevirici.kaynak, cevirici.hedef].includes('GRA')
+      ? el('p', { sinif: 'ipucu' }, 'Altın fiyatı işçiliği tam yansıtmaz.')
+      : null,
   );
 }
 
 function canliTazele() {
   if (!canliEkran) return;
+  // Çeviriciye yazarken ekran yenilenmesin, yalnız sonuç güncellensin.
+  if (document.activeElement?.id === 'cevirici-miktar') return ceviriciYaz?.();
   const konum = window.scrollY ?? 0;
   canliEkran();
   window.scrollTo?.(0, konum);
@@ -2304,7 +2376,10 @@ async function piyasaYenile() {
   const fiyatlar = asil.status === 'fulfilled' ? fiyatCoz(asil.value) : null;
   const kur = resmi.status === 'fulfilled' ? tcmbCoz(resmi.value) : null;
   if (kur) tcmbKur = kur;
-  if (fiyatlar) piyasaKaydi = { ...fiyatlar, alindi: Date.now() };
+  if (fiyatlar) {
+    const simdi = Date.now();
+    piyasaKaydi = { ...fiyatlar, alindi: simdi, degisti: fiyatDegistiMi(piyasaKaydi, fiyatlar) ? simdi : piyasaKaydi.degisti ?? simdi };
+  }
   piyasaHata = !fiyatlar;
   if (piyasaKaydi) piyasaKaydet({ ...piyasaKaydi, tcmb: tcmbKur });
   piyasaYukleniyor = false;

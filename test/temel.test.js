@@ -827,3 +827,30 @@ test('görünüm ve titreşim alanları doğrulanır', () => {
   assert.equal(veriGecerliMi({ ...temel, mod: 'gri' }), false);
   assert.equal(veriGecerliMi({ ...temel, titresim: 'evet' }), false);
 });
+
+test('çevirici: alış ve satış doğru yönde, gidiş-dönüş başlangıcı geçmez', async () => {
+  const { cevir, gerekli } = await import('../cevirici.js');
+  const fiyat = (kod) => ({ USD: { alis: 49.9256, satis: 49.9589 }, EUR: { alis: 55.715, satis: 55.8121 }, GRA: { alis: 6222.08, satis: 6222.9 }, CEYREKALTIN: { alis: 10042.08, satis: 10274.06 } }[kod] ?? null);
+  const yakin = (a, b) => assert.ok(Math.abs(a - b) < 0.01, `${a} ${b}`);
+  yakin(cevir(100, 'USD', 'TL', fiyat), 4992.56);
+  yakin(gerekli(100, 'USD', 'TL', fiyat), 4995.89);
+  yakin(cevir(5000, 'TL', 'USD', fiyat), 100.08);
+  yakin(gerekli(5000, 'TL', 'USD', fiyat), 100.15);
+  yakin(cevir(100, 'USD', 'EUR', fiyat), 89.45);
+  yakin(cevir(1, 'CEYREKALTIN', 'USD', fiyat), 201.01);
+  assert.ok(Math.abs(cevir(5000, 'TL', 'GRA', fiyat) - 0.8035) < 0.0001);
+  assert.ok(cevir(cevir(100, 'USD', 'TL', fiyat), 'TL', 'USD', fiyat) < 100);
+  assert.equal(cevir(100, 'USD', 'YARIMALTIN', fiyat), null);
+  assert.equal(gerekli(100, 'TAMALTIN', 'TL', fiyat), null);
+});
+
+test('güncellik fiyatın değişmesine bakar, saat ilerlese de durgun fiyat güncel sayılmaz', async () => {
+  const { fiyatDegistiMi, piyasaDurumu } = await import('../piyasa.js');
+  const a = { fiyatlar: { USD: { alis: 1, satis: 2 } } };
+  assert.equal(fiyatDegistiMi(null, a), true);
+  assert.equal(fiyatDegistiMi(a, { fiyatlar: { USD: { alis: 1, satis: 2 } } }), false);
+  assert.equal(fiyatDegistiMi(a, { fiyatlar: { USD: { alis: 1, satis: 3 } } }), true);
+  const saat = 3600000;
+  assert.equal(piyasaDurumu({ tarih: '2026-10-30', alindi: 2 * saat, degisti: 1.5 * saat }, 2 * saat + 1000, '2026-10-30'), 'guncel');
+  assert.equal(piyasaDurumu({ tarih: '2026-10-30', alindi: 3 * saat, degisti: saat }, 3 * saat + 1000, '2026-10-30'), 'eski');
+});

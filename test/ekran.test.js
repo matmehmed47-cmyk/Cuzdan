@@ -608,7 +608,7 @@ test('piyasa fiyatları gösterilir, kaynak bozulunca son fiyat kalır', async (
   assert.match(metin(window), /6\.100,00 TL/);
 });
 
-test('param ne alır: satış fiyatıyla hesaplar, serbest parayı getirir', async () => {
+test('çevirici: iki yönde alış-satışla hesaplar, serbest parayı getirir, yazarken bozulmaz', async () => {
   const ayar = ilkAyar(15);
   const baslangic = donemBul(ayar, bugunTR()).baslangic;
   const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 2150000 } } }), (w) => {
@@ -616,27 +616,40 @@ test('param ne alır: satış fiyatıyla hesaplar, serbest parayı getirir', asy
   });
   await new Promise((bitti) => setTimeout(bitti, 20));
   const { document } = window;
-  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent.startsWith(m));
-  const kutu = () => document.getElementById('tutar');
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kutu = () => document.getElementById('cevirici-miktar');
+  const sonuc = () => document.getElementById('cevirici-sonuc')?.textContent;
   const yaz = (deger) => {
     kutu().value = deger;
     kutu().dispatchEvent(new window.Event('input', { bubbles: true }));
   };
 
   dugme('Piyasa').click();
-  dugme('Param ne alır').click();
-  yaz('4.300');
-  assert.match(metin(window), /100,00 dolar/);
+  yaz('100');
+  assert.equal(sonuc(), '4.200,00 TL');
+  assert.match(metin(window), /100,00 dolar bozdurursan/);
+  assert.match(metin(window), /100,00 dolar almak için gereken: 4\.300,00 TL/);
+  assert.match(metin(window), /Dolar: alış 42,0000 · satış 43,0000/);
+  assert.match(metin(window), /ekran fiyatı/);
+
+  document.querySelector('[aria-label="Yönü değiştir"]').click();
+  assert.equal(sonuc(), '2,33 dolar');
+  assert.equal(kutu().value, '100');
+  assert.match(metin(window), /100,00 TL ile alırsın/);
+
   yaz('yanlış');
   assert.match(metin(window), /Tutarı örnekteki gibi yaz/);
-  assert.equal(document.getElementById('ne-alir').textContent, '');
+  assert.equal(sonuc(), undefined);
 
-  dugme('Serbest paramı getir').click();
+  dugme('Serbest param').click();
   assert.equal(kutu().value, '21.500,00 TL');
-  assert.match(metin(window), /500,00 dolar/);
+  assert.equal(sonuc(), '500,00 dolar');
   assert.match(metin(window), /2 adet/);
   assert.match(metin(window), /Fiyat yok/);
-  assert.match(metin(window), /Yaklaşık hesaptır/);
+
+  document.getElementById('cevirici-hedef').value = 'GRA';
+  document.getElementById('cevirici-hedef').dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.match(metin(window), /işçiliği tam yansıtmaz/);
 });
 
 test('hesap makinesi: ekran, son işlemler, harcamaya aktarma, formu bozmadan aktarma', async () => {

@@ -6,6 +6,7 @@ export const TCMB_DOSYA = './tcmb.json';
 export const YENILEME_SURESI = 5 * 60 * 1000;
 export const ELLE_YENILEME_SURESI = 30 * 1000;
 const GUNCEL_SURE = 15 * 60 * 1000;
+const DURGUN_SURE = 60 * 60 * 1000;
 const ANAHTAR = 'cuzdan.piyasa';
 
 export const DOVIZLER = [
@@ -59,20 +60,20 @@ export function haftaSonuMu(tarih) {
   return gun === 0 || gun === 6;
 }
 
-// Resmî tatiller bilinmez; o günler de güncel görünebilir.
+// Kaynağın saati fiyat değişmese de ilerler; güncellik fiyatın en son ne zaman değiştiğine bakar.
 export function piyasaDurumu(kayit, simdi, bugun) {
   if (!kayit) return 'yok';
   if (haftaSonuMu(bugun)) return 'kapali';
-  return simdi - kayit.alindi <= GUNCEL_SURE && kayit.tarih === bugun ? 'guncel' : 'eski';
+  const canli = simdi - kayit.alindi <= GUNCEL_SURE && simdi - (kayit.degisti ?? kayit.alindi) <= DURGUN_SURE;
+  return canli && kayit.tarih === bugun ? 'guncel' : 'eski';
+}
+
+export function fiyatDegistiMi(eski, yeni) {
+  return !eski || JSON.stringify(eski.fiyatlar) !== JSON.stringify(yeni.fiyatlar);
 }
 
 export function fiyatYaz(sayi, ondalik = 2) {
   return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: ondalik, maximumFractionDigits: ondalik }).format(sayi);
-}
-
-// Kullanıcı TL verip satın aldığı için satış fiyatı kullanılır.
-export function neAlir(kurus, fiyat) {
-  return kurus / 100 / fiyat;
 }
 
 export function piyasaYukle() {
