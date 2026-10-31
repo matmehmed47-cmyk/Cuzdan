@@ -1040,3 +1040,20 @@ test('hareketler ekranı: hepsi tek yerde, filtre, düzeltme, geçmiş dönem', 
   assert.match(metin(window), /Eski/);
   assert.equal(satir('Eski').tagName, 'DIV');
 });
+
+test('imza: ana ekranda küçük, Hakkında sayfasında ad ile birlikte', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100 } } }));
+  const { document } = window;
+
+  assert.ok(document.querySelectorAll('.imza svg path').length > 5);
+  document.querySelector('[aria-label="Hakkında"]').click();
+  assert.match(metin(window), /Mehmetnur Özkoç/);
+  assert.match(metin(window), /Matematik Öğretmeni/);
+  assert.ok(document.querySelector('.imza.canli'));
+  document.querySelector('[aria-label="İmzayı yeniden çiz"]').click();
+  assert.ok(document.querySelector('.imza.canli'));
+  document.querySelector('[aria-label="Geri"]').click();
+  assert.ok(document.getElementById('ana-para'));
+});

@@ -108,6 +108,7 @@ import {
 import { kenardaPara, planAyir, planDurumu, planEkle, planKapat } from './plan.js';
 import { defterDurumu, defterEkle, defterOde, defterOdemeSil, defterOzet, defterSil } from './defter.js';
 import { GRUPLAR, girenMi, gunlereAyir, hareketListesi, hareketToplamlari } from './hareket.js';
+import { IMZA } from './imza.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
 import { konusmaCoz } from './ses.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
@@ -508,6 +509,7 @@ function anaEkran() {
       ),
     ),
     el('p', { sinif: 'ipucu orta bosluk' }, oturum() ? `Hesabına kaydediliyor · ${oturum().eposta}` : 'Veriler sadece bu cihazda. Ayarlar bölümünden hesap açabilirsin.'),
+    el('button', { type: 'button', sinif: 'imza-dugme', 'aria-label': 'Hakkında', onclick: () => hakkindaEkrani(anaEkran) }, imzaCiz()),
   );
   canliEkran = anaEkran;
 }
@@ -3018,6 +3020,39 @@ async function hesabiSil() {
   kurulumEkrani();
 }
 
+/* Hakkında */
+
+function imzaCiz(canli = false) {
+  const cizgiler = IMZA.cizgiler.map(({ yol, bas, sure }) => `<path pathLength="1" d="${yol}" style="--bas:${bas}s;--sure:${sure}s"/>`).join('');
+  return el('span', {
+    sinif: `imza${canli ? ' canli' : ''}`,
+    role: 'img',
+    'aria-label': 'Mehmetnur Özkoç imzası',
+    innerHTML: `<svg viewBox="0 0 ${IMZA.genislik} ${IMZA.yukseklik}">${cizgiler}</svg>`,
+  });
+}
+
+function hakkindaEkrani(geri) {
+  const kart = el('button', {
+    type: 'button',
+    sinif: 'imza-kart',
+    'aria-label': 'İmzayı yeniden çiz',
+    onclick: () => hakkindaEkrani(geri),
+  }, imzaCiz(true));
+  goster(
+    ustBolum('Hakkında', geri),
+    el(
+      'section',
+      { sinif: 'kart orta imza-bolum' },
+      kart,
+      el('p', { sinif: 'imza-ad' }, 'Mehmetnur Özkoç'),
+      el('p', { sinif: 'ipucu' }, 'Matematik Öğretmeni'),
+      el('p', { sinif: 'bosluk' }, 'Cüzdan’ı kendim ve yakınlarım için tasarladım. Ücretsiz, reklamsız, sade.'),
+    ),
+    el('p', { sinif: 'ipucu orta bosluk' }, '2026'),
+  );
+}
+
 /* Ayarlar */
 
 function ayarlarEkrani() {
@@ -3073,7 +3108,12 @@ function ayarlarEkrani() {
       'section',
       { sinif: 'kart' },
       el('h2', {}, 'Uygulama'),
-      el('button', { type: 'button', sinif: 'ikincil', onclick: kurulumRehberi }, 'Ana ekrana ekle'),
+      el(
+        'div',
+        { sinif: 'ikili' },
+        el('button', { type: 'button', sinif: 'ikincil', onclick: kurulumRehberi }, 'Ana ekrana ekle'),
+        el('button', { type: 'button', sinif: 'ikincil', onclick: () => hakkindaEkrani(ayarlarEkrani) }, 'Hakkında'),
+      ),
     ),
     el(
       'section',

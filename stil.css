@@ -1394,3 +1394,72 @@ button.hareket + button.hareket {
 .hero button.hayalet.bosluk {
   margin-top: 12px;
 }
+
+/* İmza */
+
+.imza {
+  display: block;
+  color: var(--ana);
+}
+
+.imza svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.imza.canli path {
+  stroke-dasharray: 1 2;
+  stroke-dashoffset: 1.02;
+  animation: imza-ciz var(--sure) linear var(--bas) forwards;
+}
+
+@keyframes imza-ciz {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .imza.canli path {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+}
+
+button.imza-dugme {
+  display: block;
+  width: 62px;
+  min-height: 0;
+  margin: 8px auto 0;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  opacity: 0.7;
+}
+
+.imza-bolum {
+  padding: 28px 20px;
+}
+
+button.imza-kart {
+  display: block;
+  width: min(62%, 230px);
+  min-height: 0;
+  margin: 0 auto 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.imza-ad {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
