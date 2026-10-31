@@ -27,6 +27,36 @@ const metin = (window) => {
   return yazi;
 };
 
+test('kayıtlı fatura: bu dönemde olmayan ödeme tutar sorularak erken ödenir ve geri alınır', async () => {
+  const bugun = bugunTR();
+  const donem = donemBul(ilkAyar(15), bugun);
+  const ay = (d) => d.slice(0, 7);
+  const ilkAy = ay(new Date(Date.parse(donem.bitis) + 86400000 * 32).toISOString());
+  const baslangic = JSON.stringify({
+    surum: 1,
+    ad: 'Ev',
+    ayar: ilkAyar(15),
+    faturalar: [{ id: 'a', ad: 'Su', tur: 'sabit', gun: 10, kurus: 30000, ilkAy }],
+    donemler: { [donem.baslangic]: { para: 100000, hareketler: [] } },
+  });
+  const window = await uygulamaAc(baslangic);
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+
+  dugme('Ödemeler').click();
+  assert.match(metin(window), /Bu dönem ödemesi olan fatura yok/);
+  assert.match(metin(window), /Sıradaki:/);
+  dugme('✓ Ödedim').click();
+  assert.match(metin(window), /ödemesi için ne kadar ödedin/);
+  assert.match(document.getElementById('tutar').value, /^300,00/);
+  gonder(window, document.querySelector('form'));
+
+  assert.match(metin(window), /✓ Ödendi/);
+  assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[donem.baslangic].hareketler[0].ay, ilkAy);
+  dugme('Geri al').click();
+  assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[donem.baslangic].hareketler.length, 0);
+});
+
 test('ilk kurulum: ad, maaş günü ve para ile ana ekrana gelir', async () => {
   const window = await uygulamaAc();
   const { document } = window;

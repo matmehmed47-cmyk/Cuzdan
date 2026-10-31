@@ -42,6 +42,7 @@ import {
   faturaGuncelle,
   faturaOde,
   faturaSil,
+  ileriKalemler,
   kartOdemeTarihi,
   odemeGeriAl,
 } from './fatura.js';
@@ -626,7 +627,8 @@ function kalemKutusu(odeme, donem, bugun, geri, tamListe = false) {
 
 function odemeBaslat(kalem, donem, bugun, geri) {
   const onceki = veri;
-  if (kalem.tur === 'sabit') {
+  const erken = kalem.vade > donem.bitis;
+  if (kalem.tur === 'sabit' && !erken) {
     kaydetVeUyar(faturaOde(veri, donem.baslangic, kalem, kalem.kurus, bugun));
     geri();
     return bandGoster(`${kalem.ad} ödendi`, onceki, geri);
@@ -644,7 +646,7 @@ function odemeBaslat(kalem, donem, bugun, geri) {
         bandGoster(`${kalem.ad} ödendi`, onceki, geri);
       },
     },
-    tutarAlani('tutar', 'Bu ay ne kadar ödedin?', kalem.kurus ? paraYaz(kalem.kurus) : ''),
+    tutarAlani('tutar', erken ? `${ayYaz(kalem.ay)} ödemesi için ne kadar ödedin?` : 'Bu ay ne kadar ödedin?', kalem.kurus ? paraYaz(kalem.kurus) : ''),
     hata,
     el('button', { type: 'submit' }, 'Ödedim'),
   );
@@ -656,7 +658,8 @@ function faturalarEkrani() {
   const donem = donemBul(veri.ayar, bugun);
   if (!veri.donemler[donem.baslangic]) return anaEkran();
 
-  const kalemler = donemKalemleri(veri, donem, bugun);
+  const ileri = ileriKalemler(veri, donem, bugun);
+  const kalemler = [...donemKalemleri(veri, donem, bugun), ...ileri.filter((k) => k.geriAlinabilir && k.vade > donem.bitis)];
   const faturalar = veri.faturalar ?? [];
   sayfa(
     'odeme',
@@ -681,12 +684,18 @@ function faturalarEkrani() {
             'section',
             { sinif: 'kart' },
             el('h2', {}, 'Kayıtlı faturalar'),
-            faturalar.map((f) => kalem(
-              f.ad,
-              f.kurus ? paraYaz(f.kurus) : 'Değişken',
-              faturaAltYazisi(f, bugun),
-              el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => faturaFormu(f) }, 'Düzenle'),
-            )),
+            faturalar.map((f) => {
+              const siradaki = ileri.find((k) => k.faturaId === f.id && bekliyorMu(k));
+              return kalem(
+                f.ad,
+                f.kurus ? paraYaz(f.kurus) : 'Değişken',
+                `${faturaAltYazisi(f, bugun)}${siradaki ? ` · Sıradaki: ${tarihYaz(siradaki.vade)}` : ''}`,
+                [
+                  siradaki ? el('button', { type: 'button', sinif: 'kucuk', onclick: () => odemeBaslat(siradaki, donem, bugun, faturalarEkrani) }, '✓ Ödedim') : null,
+                  el('button', { type: 'button', sinif: 'ikincil kucuk', onclick: () => faturaFormu(f) }, 'Düzenle'),
+                ],
+              );
+            }),
           )
         : null,
     ),

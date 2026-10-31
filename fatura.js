@@ -1,6 +1,8 @@
 // Her ödeme fatura kimliği ve 'YYYY-AA' ile eşleşir; ödeme günü değişse de ay aynı kaldığı için kayıt kaybolmaz.
 
-import { ayinGunu } from './donem.js';
+import { ayinGunu, gunEkle } from './donem.js';
+
+const ILERI_GUN = 400;
 
 export function ayIleri(ay) {
   const [y, a] = ay.split('-').map(Number);
@@ -60,6 +62,11 @@ export function donemKalemleri(veri, donem, bugun) {
   }
 
   return kalemler.sort((a, b) => Number(bekliyorMu(b)) - Number(bekliyorMu(a)) || a.vade.localeCompare(b.vade));
+}
+
+// Faturayı erken ödemek için bu dönemin ötesindeki aylar da görünür.
+export function ileriKalemler(veri, donem, bugun) {
+  return donemKalemleri(veri, { baslangic: donem.baslangic, bitis: gunEkle(bugun, ILERI_GUN) }, bugun);
 }
 
 export function ayrilanTutar(kalemler) {

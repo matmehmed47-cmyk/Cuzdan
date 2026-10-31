@@ -12,6 +12,7 @@ import {
   faturaGuncelle,
   faturaOde,
   faturaSil,
+  ileriKalemler,
   odemeGeriAl,
 } from '../fatura.js';
 import {
@@ -183,6 +184,23 @@ test('fatura: bekleyen tutar ayrılır, ödeyince paradan düşer, ayrılan sıf
   const geri = odemeGeriAl(odendi, donem.baslangic, kalem);
   assert.equal(kalanPara(geri.donemler[donem.baslangic]), 1000000);
   assert.equal(donemKalemleri(geri, donem, BUGUN)[0].durum, 'bekliyor');
+});
+
+test('fatura: sonraki dönemin ödemesi erken ödenir, sonraki dönemde beklemez', () => {
+  const su = { ...kira, gun: 20, ilkAy: '2026-11' };
+  const veri = faturaVerisi([su]);
+  assert.equal(donemKalemleri(veri, donem, BUGUN).length, 0);
+
+  const kalem = ileriKalemler(veri, donem, BUGUN).find((k) => k.durum === 'bekliyor');
+  assert.equal(kalem.vade, '2026-11-20');
+  const odendi = faturaOde(veri, donem.baslangic, kalem, kalem.kurus, BUGUN);
+  assert.equal(kalanPara(odendi.donemler[donem.baslangic]), 500000);
+
+  const ileri = ileriKalemler(odendi, donem, BUGUN);
+  assert.equal(ileri[0].vade, '2026-12-20');
+  assert.ok(ileri.find((k) => k.ay === '2026-11').geriAlinabilir);
+  const sonraki = donemBul(ilkAyar(15), '2026-11-16');
+  assert.equal(donemKalemleri(odendi, sonraki, '2026-11-16')[0].durum, 'odendi');
 });
 
 test('fatura: değişken tutar belli değilse ayrılan değişmez, gerçek tutar kaydedilir', () => {
