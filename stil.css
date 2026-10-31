@@ -1465,14 +1465,21 @@ details.secenekler summary {
   width: 100%;
   height: auto;
   overflow: visible;
+}
+
+.imza .kalem {
   fill: none;
-  stroke: currentColor;
-  stroke-width: 3;
+  stroke: #ffffff;
+  stroke-width: 12;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.imza.canli path {
+.imza.canli svg {
+  filter: drop-shadow(0 2px 10px rgb(236 198 89 / 34%));
+}
+
+.imza.canli .kalem {
   stroke-dasharray: 1 2;
   stroke-dashoffset: 1.02;
   animation: imza-ciz var(--sure) linear var(--bas) forwards;
@@ -1485,7 +1492,7 @@ details.secenekler summary {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .imza.canli path {
+  .imza.canli .kalem {
     stroke-dashoffset: 0;
     animation: none;
   }
@@ -1493,24 +1500,23 @@ details.secenekler summary {
 
 button.imza-dugme {
   display: block;
-  width: 62px;
+  width: 92px;
   min-height: 0;
   margin: 8px auto 0;
   padding: 4px;
   border: 0;
   background: transparent;
-  opacity: 0.7;
 }
 
 .imza-bolum {
-  padding: 28px 20px;
+  padding: 30px 22px 26px;
 }
 
 button.imza-kart {
   display: block;
-  width: min(62%, 230px);
+  width: min(84%, 320px);
   min-height: 0;
-  margin: 0 auto 14px;
+  margin: 0 auto 16px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1518,9 +1524,11 @@ button.imza-kart {
 
 .imza-ad {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: 700;
+  letter-spacing: 0.04em;
 }
+
 
 .karsilama img {
   display: block;
@@ -1578,8 +1586,7 @@ button.imza-kart {
 }
 
 .acilis .imza {
-  width: min(62vw, 240px);
-  color: #ffffff;
+  width: min(76vw, 300px);
 }
 
 .a-ad {

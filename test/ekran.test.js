@@ -1048,7 +1048,7 @@ test('imza: ana ekranda küçük, Hakkında sayfasında ad ile birlikte', async 
   const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100 } } }));
   const { document } = window;
 
-  assert.ok(document.querySelectorAll('.imza svg path').length > 5);
+  assert.equal(document.querySelectorAll('.imza-dugme svg path').length, 1);
   document.querySelector('[aria-label="Hakkında"]').click();
   assert.match(metin(window), /Mehmetnur Özkoç/);
   assert.match(metin(window), /Matematik Öğretmeni/);

@@ -110,7 +110,7 @@ import { defterDurumu, defterEkle, defterOde, defterOdemeSil, defterOzet, defter
 import { GRUPLAR, girenMi, gunlereAyir, hareketListesi, hareketToplamlari } from './hareket.js';
 import { acilisGoster } from './acilis.js';
 import { sesAyarla, sesCal } from './sesler.js';
-import { IMZA } from './imza.js';
+import { imzaSvg } from './imza.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
 import { konusmaCoz } from './ses.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
@@ -3112,12 +3112,11 @@ async function hesabiSil() {
 /* Hakkında */
 
 function imzaCiz(canli = false) {
-  const cizgiler = IMZA.cizgiler.map(({ yol, bas, sure }) => `<path pathLength="1" d="${yol}" style="--bas:${bas}s;--sure:${sure}s"/>`).join('');
   return el('span', {
     sinif: `imza${canli ? ' canli' : ''}`,
     role: 'img',
     'aria-label': 'Mehmetnur Özkoç imzası',
-    innerHTML: `<svg viewBox="0 0 ${IMZA.genislik} ${IMZA.yukseklik}">${cizgiler}</svg>`,
+    innerHTML: imzaSvg({ canli, altin: canli }),
   });
 }
 
@@ -3132,7 +3131,7 @@ function hakkindaEkrani(geri) {
     ustBolum('Hakkında', geri),
     el(
       'section',
-      { sinif: 'kart orta imza-bolum' },
+      { sinif: 'hero orta imza-bolum' },
       kart,
       el('p', { sinif: 'imza-ad' }, 'Mehmetnur Özkoç'),
       el('p', { sinif: 'ipucu' }, 'Matematik Öğretmeni'),

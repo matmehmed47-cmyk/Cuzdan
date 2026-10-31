@@ -1,12 +1,12 @@
 // Açılış: önce logo parça parça kurulup kaybolur, sonra imza tek başına yazılır. Dokununca hemen geçilir.
 
-import { IMZA } from './imza.js';
+import { imzaSvg } from './imza.js';
 import { sesCal, sesCalabilirMi } from './sesler.js';
 
 const SURE = 3900;
 const KISA_SURE = 900;
 const IMZA_BAS = 2.35;
-const IMZA_HIZ = 0.3;
+const IMZA_HIZ = 0.32;
 const SES_ANI = 800;
 
 const LOGO = `<svg class="a-logo" viewBox="0 0 320 300" aria-hidden="true">
@@ -28,20 +28,13 @@ const LOGO = `<svg class="a-logo" viewBox="0 0 320 300" aria-hidden="true">
   </g>
 </svg>`;
 
-function imzaYolu() {
-  const cizgiler = IMZA.cizgiler
-    .map(({ yol, bas, sure }) => `<path pathLength="1" d="${yol}" style="--bas:${(IMZA_BAS + bas * IMZA_HIZ).toFixed(2)}s;--sure:${(sure * IMZA_HIZ).toFixed(3)}s"/>`)
-    .join('');
-  return `<span class="imza canli"><svg viewBox="0 0 ${IMZA.genislik} ${IMZA.yukseklik}">${cizgiler}</svg></span>`;
-}
-
 export function acilisGoster() {
   const perde = document.getElementById('acilis') ?? document.body.appendChild(document.createElement('div'));
   perde.id = 'acilis';
   perde.className = 'acilis';
   perde.setAttribute('role', 'img');
   perde.setAttribute('aria-label', 'Cüzdan, Mehmetnur Özkoç');
-  perde.innerHTML = `<div class="a-sahne a-sahne-logo">${LOGO}</div><div class="a-sahne a-sahne-imza">${imzaYolu()}<p class="a-ad">Mehmetnur Özkoç</p></div><p class="a-dokun" hidden>Sesi duymak için dokun</p>`;
+  perde.innerHTML = `<div class="a-sahne a-sahne-logo">${LOGO}</div><div class="a-sahne a-sahne-imza"><span class="imza canli">${imzaSvg({ canli: true, altin: true, bas: IMZA_BAS, hiz: IMZA_HIZ })}</span><p class="a-ad">Mehmetnur Özkoç</p></div><p class="a-dokun" hidden>Sesi duymak için dokun</p>`;
 
   // Sikke cepten çıkarken çalar. Telefon dokunuşsuz sese izin vermezse yazı çıkar, dokununca çalar ve açılış sürer.
   const ipucu = perde.querySelector('.a-dokun');
