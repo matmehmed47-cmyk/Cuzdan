@@ -3,8 +3,8 @@
   "short_name": "Cüzdan",
   "description": "Kişisel para ve fatura takibi",
   "lang": "tr",
-  "id": "./cuzdan-uygulama",
-  "start_url": "./index.html?ac=uygulama",
+  "id": "./",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0a4238",
@@ -12,7 +12,6 @@
   "icons": [
     { "src": "ikon/ikon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "ikon/ikon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "ikon/ikon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
     { "src": "ikon/ikon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
