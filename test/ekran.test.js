@@ -1183,3 +1183,59 @@ test('sesler: ayardan kapatılır, kapalıyken çalınmaz, ses sistemi yoksa uyg
   assert.equal(calan.length, onceki + 1);
   assert.equal(kayit().ses, true);
 });
+
+test('tema ve titreşim: seçilir, kaydedilir, yeniden açılışta uygulanır, kapatılır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const titresim = [];
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 100000 } } }), (w) => {
+    w.navigator.vibrate = (k) => titresim.push(k);
+  });
+  const { document } = window;
+  const kok = document.documentElement;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  dugme('Koyu').click();
+  assert.equal(kok.dataset.theme, 'dark');
+  assert.equal(kayit().mod, 'koyu');
+  dugme('Lacivert').click();
+  assert.equal(kok.dataset.renk, 'lacivert');
+  assert.equal(kok.dataset.theme, 'dark');
+  dugme('Otomatik').click();
+  assert.equal(kok.dataset.theme, undefined);
+  dugme('Gece altını').click();
+  assert.equal(kok.dataset.theme, 'dark');
+  assert.match(metin(window), /her zaman koyu/);
+  dugme('Zümrüt').click();
+  assert.equal(kok.dataset.renk, undefined);
+  assert.equal(kayit().renk, undefined);
+  dugme('Koyu').click();
+  dugme('Otomatik').click();
+  assert.equal(kok.dataset.theme, undefined);
+
+  document.querySelector('[aria-label="Geri"]').click();
+  dugme('+ Harcama').click();
+  document.getElementById('tutar').value = '100';
+  dugme('Market').click();
+  assert.deepEqual(titresim, [14]);
+
+  document.querySelector('[aria-label="Ayarlar"]').click();
+  document.getElementById('titresim').click();
+  assert.equal(kayit().titresim, false);
+  document.querySelector('[aria-label="Geri"]').click();
+  dugme('+ Harcama').click();
+  document.getElementById('tutar').value = '100';
+  dugme('Market').click();
+  assert.deepEqual(titresim, [14]);
+});
+
+test('tema yedekte doğrulanır, eski veriyle uygulama açılır', async () => {
+  const ayar = ilkAyar(15);
+  const baslangic = donemBul(ayar, bugunTR()).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, renk: 'lacivert', mod: 'acik', titresim: false, donemler: { [baslangic]: { para: 100 } } }));
+  assert.equal(window.document.documentElement.dataset.renk, 'lacivert');
+  assert.equal(window.document.documentElement.dataset.theme, 'light');
+  assert.ok(window.document.getElementById('ana-para'));
+});

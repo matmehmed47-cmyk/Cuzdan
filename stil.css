@@ -1669,3 +1669,100 @@ button.imza-kart {
 .a-dokun[hidden] {
   display: none;
 }
+
+/* Temalar: zümrüt varsayılandır, üstteki değerleri kullanır. */
+
+:root[data-renk="lacivert"] {
+  --zemin: #f0f3f8;
+  --yuzey-2: #ebf0f7;
+  --cizgi: #dbe2ee;
+  --ana: #1f4a8c;
+  --vurgu-zemin: #e1e9f6;
+  --golge: 0 1px 2px rgb(18 38 79 / 6%), 0 8px 24px rgb(18 38 79 / 7%);
+  --hero: linear-gradient(145deg, #12264f 0%, #1e3f7a 55%, #2a558f 100%);
+}
+
+:root[data-renk="lacivert"][data-theme="dark"] {
+  --zemin: #0c121e;
+  --yuzey: #151e2e;
+  --yuzey-2: #1e293c;
+  --cizgi: #2b3950;
+  --ana: #8fb4f2;
+  --ana-yazi: #0b1a33;
+  --vurgu-zemin: #1a2a45;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-renk="lacivert"]:not([data-theme="light"]) {
+    --zemin: #0c121e;
+    --yuzey: #151e2e;
+    --yuzey-2: #1e293c;
+    --cizgi: #2b3950;
+    --ana: #8fb4f2;
+    --ana-yazi: #0b1a33;
+    --vurgu-zemin: #1a2a45;
+  }
+}
+
+:root[data-renk="gece"] {
+  color-scheme: dark;
+  --zemin: #0c0c0a;
+  --yuzey: #171613;
+  --yuzey-2: #211f1a;
+  --yazi: #f4efe2;
+  --soluk: #b5ac98;
+  --cizgi: #332f26;
+  --ana: #e6bf5a;
+  --ana-yazi: #241a05;
+  --vurgu-zemin: #2e2610;
+  --altin: #eec766;
+  --altin-zemin: #352a12;
+  --hata: #ffb4ab;
+  --artis: #8fd6a8;
+  --dusus: #f3ab7c;
+  --golge: 0 1px 2px rgb(0 0 0 / 40%);
+  --hero: linear-gradient(145deg, #17140c 0%, #33280f 55%, #5c4513 100%);
+  --hero-altin: linear-gradient(145deg, #17140c 0%, #33280f 55%, #5c4513 100%);
+}
+
+.renkler {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+button.renk-kutu {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 84px;
+  margin: 0;
+  padding: 10px 4px;
+  border: 2px solid var(--cizgi);
+  border-radius: 16px;
+  background: var(--yuzey-2);
+  color: var(--yazi);
+  font-size: 0.82rem;
+}
+
+button.renk-kutu[aria-pressed="true"] {
+  border-color: var(--ana);
+}
+
+.renk-ornek {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+
+.renk-zumrut .renk-ornek {
+  background: linear-gradient(145deg, #0b4a40, #17806e);
+}
+
+.renk-gece .renk-ornek {
+  background: linear-gradient(145deg, #17140c, #e6bf5a);
+}
+
+.renk-lacivert .renk-ornek {
+  background: linear-gradient(145deg, #12264f, #2a558f);
+}

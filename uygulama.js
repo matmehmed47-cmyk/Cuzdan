@@ -236,10 +236,34 @@ function kaydetVeUyar(yeni) {
   esitleIste();
 }
 
+// Sadece önemli anlarda: tek kısa kayıt, iki kısa tamamlanma. Desteklemeyen telefonda sessizce geçer.
+function titret(kalip = 14) {
+  if (veri?.titresim !== false) window.navigator?.vibrate?.(kalip);
+}
+
+function tamamlandi() {
+  sesCal('kazanc');
+  titret([14, 70, 14]);
+}
+
+// Gece altını yalnız koyu çalışır; zümrüt varsayılandır, kaydedilmez.
+const TEMA_RENGI = { zumrut: '#0a4238', gece: '#0c0c0a', lacivert: '#12264f' };
+
+function gorunumUygula() {
+  const kok_ = document.documentElement;
+  const mod = veri?.renk === 'gece' ? 'dark' : { acik: 'light', koyu: 'dark' }[veri?.mod];
+  if (mod) kok_.dataset.theme = mod;
+  else delete kok_.dataset.theme;
+  if (veri?.renk) kok_.dataset.renk = veri.renk;
+  else delete kok_.dataset.renk;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', TEMA_RENGI[veri?.renk ?? 'zumrut']);
+}
+
 // Yanlış dokunuşu tek hamlede geri almak için önceki kaydı birkaç saniye tutar.
 function bandGoster(metin, onceki, ekran) {
   document.querySelector('.kayit-bandi')?.remove();
   clearTimeout(bandSayaci);
+  titret();
   const bant = el(
     'div',
     { sinif: 'kayit-bandi', role: 'status' },
@@ -820,9 +844,9 @@ function taksitOdeFormu(kalem, donem, geri) {
         if (kurus > kalan) return hataGoster(hata, `Kalan borç ${paraYaz(kalan)}. Daha fazlası yazılamaz.`);
         const onceki = veri;
         kaydetVeUyar(taksitOde(veri, donem.baslangic, kalem, kurus, bugunTR()));
-        if (kurus === kalan) sesCal('kazanc');
         geri();
         bandGoster(`${kalem.ad} ödendi`, onceki, geri);
+        if (kurus === kalan) tamamlandi();
       },
     },
     tutarAlani('tutar', 'Bu ay ne kadar ödedin?', kalem.kurus ? paraYaz(kalem.kurus) : ''),
@@ -2042,6 +2066,7 @@ function birikimFormu(ilkTur = 'gram', geri = birikimlerEkrani) {
         }
         kaydetVeUyar(birikimEkle(veri, eskiKutu.checked ? null : donem.baslangic, { id: birikimKimligi(), tur, miktar, kurus, tarih }));
         sesCal('kazanc');
+        titret();
         birikimDetayi(tur);
       },
     },
@@ -2555,7 +2580,7 @@ function defterOdemeFormu(id) {
         if (kurus > kalan) return hataGoster(hata, `Kalan ${paraYaz(kalan)}. Daha fazlası yazılamaz.`);
         const donemVar = paraKutusu.checked && veri.donemler[donem.baslangic];
         kaydetVeUyar(defterOde(veri, id, { id: defterKimligi('o'), kurus, tarih: bugun }, donemVar ? donem.baslangic : null));
-        if (kurus === kalan) sesCal('kazanc');
+        if (kurus === kalan) tamamlandi();
         defterDetayi(id);
       },
     },
@@ -2658,7 +2683,7 @@ function planAyirFormu(id) {
         if (!kurus) return hataGoster(hata, 'Sıfırdan büyük bir tutar yaz. Örnek: 1.000');
         if (kurus > kalan) return hataGoster(hata, `Kalan ${paraYaz(kalan)}. Daha fazlası ayrılamaz.`);
         kaydetVeUyar(planAyir(veri, id, kurus));
-        if (kurus === kalan) sesCal('kazanc');
+        if (kurus === kalan) tamamlandi();
         planlarEkrani();
       },
     },
@@ -2956,6 +2981,8 @@ function veriOzeti(kayit) {
 function uzaktanAl(uzak) {
   veri = uzak.veri;
   kaydet(veri);
+  gorunumUygula();
+  sesAyarla(veri.ses !== false);
   esitlemeYaz({ surum: uzak.surum, kirli: false });
   planYaz();
 }
@@ -3061,6 +3088,7 @@ async function cikisEkrani() {
   await cikisYap();
   temizle();
   veri = null;
+  gorunumUygula();
   kurulumTaslak = { adim: 1, ad: '', gun: null };
   kurulumEkrani();
 }
@@ -3154,7 +3182,42 @@ function ayarlarEkrani() {
     el(
       'section',
       { sinif: 'kart' },
-      el('h2', {}, 'Sesler'),
+      el('h2', {}, 'Görünüm'),
+      el(
+        'div',
+        { sinif: 'renkler' },
+        [['zumrut', 'Zümrüt'], ['gece', 'Gece altını'], ['lacivert', 'Lacivert']].map(([kod, ad]) => el('button', {
+          type: 'button',
+          sinif: `renk-kutu renk-${kod}`,
+          'aria-pressed': String((veri.renk ?? 'zumrut') === kod),
+          onclick: () => {
+            kaydetVeUyar({ ...veri, renk: kod === 'zumrut' ? undefined : kod });
+            gorunumUygula();
+            ayarlarEkrani();
+          },
+        }, el('span', { sinif: 'renk-ornek', 'aria-hidden': 'true' }), ad)),
+      ),
+      veri.renk === 'gece'
+        ? el('p', { sinif: 'ipucu bosluk' }, 'Gece altını her zaman koyu görünür.')
+        : el(
+            'div',
+            { sinif: 'kategoriler bosluk' },
+            [[undefined, 'Otomatik'], ['acik', 'Açık'], ['koyu', 'Koyu']].map(([kod, ad]) => el('button', {
+              type: 'button',
+              sinif: 'cip',
+              'aria-pressed': String(veri.mod === kod),
+              onclick: () => {
+                kaydetVeUyar({ ...veri, mod: kod });
+                gorunumUygula();
+                ayarlarEkrani();
+              },
+            }, ad)),
+          ),
+    ),
+    el(
+      'section',
+      { sinif: 'kart' },
+      el('h2', {}, 'Ses ve titreşim'),
       el('label', { sinif: 'secim', htmlFor: 'ses' }, el('input', {
         id: 'ses',
         type: 'checkbox',
@@ -3165,7 +3228,16 @@ function ayarlarEkrani() {
           if (o.target.checked) sesCal('kazanc');
         },
       }), el('span', {}, 'Sikke seslerini çal')),
-      el('p', { sinif: 'ipucu' }, 'Açılışta, birikim eklerken ve bir borç, taksit ya da masraf tamamlanınca çalar. Telefon sessizdeyse duyulmaz.'),
+      el('label', { sinif: 'secim', htmlFor: 'titresim' }, el('input', {
+        id: 'titresim',
+        type: 'checkbox',
+        checked: veri.titresim !== false,
+        onchange: (o) => {
+          kaydetVeUyar({ ...veri, titresim: o.target.checked });
+          if (o.target.checked) titret();
+        },
+      }), el('span', {}, 'Önemli anlarda titreşim')),
+      el('p', { sinif: 'ipucu' }, 'Ses açılışta ve bir şey tamamlanınca çalar. Titreşim kayıt yapılınca kısa bir kez gelir. iPhone’da titreşim çalışmayabilir.'),
     ),
     el(
       'section',
@@ -3413,6 +3485,7 @@ if ('serviceWorker' in navigator) {
 }
 
 baslat();
+gorunumUygula();
 sesAyarla(veri?.ses !== false);
 acilisGoster();
 window.cuzdanHazir = true;

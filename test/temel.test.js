@@ -819,3 +819,11 @@ test('tutarı boş fatura geçen ayın tutarıyla ayrılır', () => {
   const sabit = ornekVeri();
   assert.equal(donemKalemleri(sabit, ornekDonem, '2026-11-16')[0].tahmin, false);
 });
+
+test('görünüm ve titreşim alanları doğrulanır', () => {
+  const temel = { surum: 1, ad: 'Ev', ayar: ilkAyar(15), donemler: {} };
+  assert.equal(veriGecerliMi({ ...temel, renk: 'gece', mod: 'koyu', titresim: false }), true);
+  assert.equal(veriGecerliMi({ ...temel, renk: 'mor' }), false);
+  assert.equal(veriGecerliMi({ ...temel, mod: 'gri' }), false);
+  assert.equal(veriGecerliMi({ ...temel, titresim: 'evet' }), false);
+});

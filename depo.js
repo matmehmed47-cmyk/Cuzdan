@@ -202,6 +202,9 @@ export function veriGecerliMi(veri) {
   if (!taksitlerGecerli(veri.taksitler) || !birikimlerGecerli(veri.birikimler) || !bildirimGecerli(veri.bildirim)) return false;
   if (!planlarGecerli(veri.planlar) || !defterGecerli(veri.defter)) return false;
   if (veri.ses !== undefined && typeof veri.ses !== 'boolean') return false;
+  if (veri.titresim !== undefined && typeof veri.titresim !== 'boolean') return false;
+  if (veri.mod !== undefined && !['acik', 'koyu'].includes(veri.mod)) return false;
+  if (veri.renk !== undefined && !['gece', 'lacivert'].includes(veri.renk)) return false;
   const tutarGecerli = (k) => k === undefined || (Number.isSafeInteger(k) && k > 0);
   if (!tutarGecerli(veri.hedef) || !tutarGecerli(veri.kose)) return false;
   if (!veri.donemler || typeof veri.donemler !== 'object') return false;
