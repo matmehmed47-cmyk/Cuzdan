@@ -15,6 +15,15 @@ import {
   odemeGeriAl,
 } from '../fatura.js';
 import {
+  bekleyenTaksitler,
+  donemTaksitleri,
+  gelecekAylar,
+  taksitBitisi,
+  taksitDurumu,
+  taksitOde,
+  taksitOdemeGeriAl,
+} from '../taksit.js';
+import {
   VARSAYILAN_KATEGORILER,
   geriAldimEkle,
   gelirEkle,
@@ -330,6 +339,64 @@ test('gelir: kaynak sıklığa göre dizilir, geri alınan ek gelir sayılmaz', 
   assert.equal(kaynakEkle(veri, 'hediye').ad, 'Hediye');
   assert.equal(kaynakEkle(veri, 'Kermes').veri.kaynaklar.at(-1), 'Kermes');
   assert.equal(veriGecerliMi({ ...veri, kaynaklar: [''] }), false);
+});
+
+const tablet = { id: 't', ad: 'Tablet', tur: 'sabit', toplam: 2500000, sayi: 5, gun: 1, ilkAy: '2026-11' };
+const taksitVerisi = (taksit = tablet) => ({ surum: 1, ad: 'Ev', ayar: ilkAyar(15), taksitler: [taksit], donemler: { '2026-10-15': { para: 3000000, hareketler: [] } } });
+
+test('taksit: 25.000 TL 5 taksit, ödedikçe kalan azalır, ayrılan bu ayın tutarıdır', () => {
+  let veri = taksitVerisi();
+  const [kalem] = donemTaksitleri(veri, donem, BUGUN);
+  assert.equal(kalem.kurus, 500000);
+  assert.equal(ayrilanTutar([kalem]), 500000);
+  assert.equal(taksitBitisi(veri, tablet, BUGUN), '2027-03');
+
+  veri = taksitOde(veri, donem.baslangic, kalem, 500000, BUGUN);
+  const durum = taksitDurumu(veri, tablet);
+  assert.deepEqual([durum.odenen, durum.kalan, durum.odenenAdet], [500000, 2000000, 1]);
+  assert.equal(kalanPara(veri.donemler[donem.baslangic]), 2500000);
+  assert.deepEqual(donemTaksitleri(veri, donem, BUGUN), []);
+  assert.equal(bekleyenTaksitler(veri, tablet, '2026-12-31', BUGUN)[0].ay, '2026-12');
+
+  assert.equal(taksitDurumu(taksitOdemeGeriAl(veri, donem.baslangic, 't', '2026-11'), tablet).kalan, 2500000);
+});
+
+test('taksit: az ödenirse kalan yeniden bölünür, kuruş kaybolmaz, son taksitte biter', () => {
+  let veri = taksitVerisi({ ...tablet, toplam: 100000, sayi: 3 });
+  const t = veri.taksitler[0];
+  assert.equal(donemTaksitleri(veri, donem, BUGUN)[0].kurus, 33334);
+  assert.equal(bekleyenTaksitler(veri, t, '2027-12-31', BUGUN).reduce((s, k) => s + k.kurus, 0), 100000);
+
+  const [kalem] = donemTaksitleri(veri, donem, BUGUN);
+  veri = taksitOde(veri, donem.baslangic, kalem, 20000, BUGUN);
+  const sonraki = bekleyenTaksitler(veri, t, '2027-12-31', BUGUN);
+  assert.deepEqual(sonraki.map((k) => k.kurus), [40000, 40000]);
+  assert.equal(taksitBitisi(veri, t, BUGUN), '2027-01');
+});
+
+test('taksit: ödenmeyen devreder ve gecikti olur; değişken taksitin tutarı sorulur', () => {
+  const yeniBugun = '2026-12-20';
+  const yeniDonem = donemBul(ilkAyar(15), yeniBugun);
+  const kalemler = donemTaksitleri(taksitVerisi(), yeniDonem, yeniBugun);
+  assert.deepEqual(kalemler.map((k) => [k.ay, k.durum]), [['2026-11', 'gecikti'], ['2026-12', 'gecikti'], ['2027-01', 'bekliyor']]);
+
+  const degisken = { ...tablet, tur: 'degisken', sayi: undefined };
+  const veri = taksitVerisi(degisken);
+  assert.equal(donemTaksitleri(veri, donem, BUGUN)[0].kurus, null);
+  assert.equal(taksitBitisi(veri, degisken, BUGUN), null);
+  assert.equal(veriGecerliMi(JSON.parse(JSON.stringify(veri))), true);
+});
+
+test('taksit: önceki ödeme sayılır, gelecek aylar toplanır, bozuk kayıt reddedilir', () => {
+  const eski = { ...tablet, onceki: 1000000 };
+  const veri = taksitVerisi(eski);
+  const durum = taksitDurumu(veri, eski);
+  assert.deepEqual([durum.odenenAdet, durum.kalan], [2, 1500000]);
+  assert.equal(taksitBitisi(veri, eski, BUGUN), '2027-01');
+  assert.deepEqual(gelecekAylar(veri, BUGUN).map((a) => a.kurus), [0, 500000, 500000, 500000, 0, 0]);
+
+  assert.equal(veriGecerliMi({ ...veri, taksitler: [{ ...tablet, sayi: undefined }] }), false);
+  assert.equal(veriGecerliMi({ ...veri, taksitler: [{ ...tablet, onceki: 2500000 }] }), false);
 });
 
 test('ortak ev: yedek doğrulaması bozuk kişi sayısını reddeder', () => {

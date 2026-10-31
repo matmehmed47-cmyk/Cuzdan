@@ -2,7 +2,7 @@
 
 import { ayinGunu } from './donem.js';
 
-function ayIleri(ay) {
+export function ayIleri(ay) {
   const [y, a] = ay.split('-').map(Number);
   return a === 12 ? `${y + 1}-01` : `${y}-${String(a + 1).padStart(2, '0')}`;
 }
@@ -12,7 +12,7 @@ function ayGeri(ay) {
   return a === 1 ? `${y - 1}-12` : `${y}-${String(a - 1).padStart(2, '0')}`;
 }
 
-function vadeBul(ay, gun) {
+export function vadeBul(ay, gun) {
   const [y, a] = ay.split('-').map(Number);
   return ayinGunu(y, a, gun);
 }

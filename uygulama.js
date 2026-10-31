@@ -2,6 +2,7 @@ import { hareketToplami, kalanPara, paraCoz, paraYaz, yaklasikAralik } from './p
 import {
   bugunTR,
   donemBul,
+  gunEkle,
   gunFarki,
   ilkAyar,
   kaydirmaSiniri,
@@ -22,6 +23,18 @@ import {
   faturaSil,
   odemeGeriAl,
 } from './fatura.js';
+import {
+  bekleyenTaksitler,
+  donemTaksitleri,
+  gelecekAylar,
+  taksitBitisi,
+  taksitDurumu,
+  taksitEkle,
+  taksitGuncelle,
+  taksitOde,
+  taksitOdemeGeriAl,
+  taksitSil,
+} from './taksit.js';
 import {
   DIGER,
   EK_GELIR,
@@ -61,7 +74,7 @@ function el(etiket, ozellikler = {}, ...cocuklar) {
     else if (ad in dugum && ad !== 'list') dugum[ad] = deger;
     else dugum.setAttribute(ad, deger);
   }
-  dugum.append(...cocuklar.flat().filter((c) => c !== null && c !== undefined));
+  dugum.append(...cocuklar.flat(Infinity).filter((c) => c !== null && c !== undefined));
   return dugum;
 }
 
@@ -76,7 +89,7 @@ function tarihYaz(tarih) {
 }
 
 function goster(...dugumler) {
-  kok.replaceChildren(...dugumler.filter(Boolean));
+  kok.replaceChildren(...dugumler.flat(Infinity).filter(Boolean));
   window.scrollTo?.(0, 0);
 }
 
@@ -253,8 +266,8 @@ function anaEkran() {
 
   const kalanGun = gunFarki(bugun, donem.sonraki);
   const para = kalanPara(kayit);
-  const kalemler = donemKalemleri(veri, donem, bugun);
-  const bekleyen = kalemler.filter(bekliyorMu);
+  const kalemler = [...donemKalemleri(veri, donem, bugun), ...donemTaksitleri(veri, donem, bugun)];
+  const bekleyen = kalemler.filter(bekliyorMu).sort((a, b) => a.vade.localeCompare(b.vade));
   const belirsiz = bekleyen.filter((k) => k.kurus === null).length;
   const ayrilan = ayrilanTutar(kalemler);
   const serbest = para - ayrilan;
@@ -268,8 +281,8 @@ function anaEkran() {
       el('p', { sinif: 'etiket' }, 'Serbest para'),
       el('p', { sinif: 'tutar', id: 'ana-para' }, paraYaz(serbest)),
       satir('Toplam para', paraYaz(para)),
-      satir('Faturalara ayrıldı', paraYaz(ayrilan)),
-      belirsiz ? el('p', { sinif: 'ipucu' }, `${belirsiz} faturanın tutarı henüz belli değil, hesaba katılmadı.`) : null,
+      satir('Ödemelere ayrıldı', paraYaz(ayrilan)),
+      belirsiz ? el('p', { sinif: 'ipucu' }, `${belirsiz} ödemenin tutarı henüz belli değil, hesaba katılmadı.`) : null,
       el('button', { type: 'button', sinif: 'ikincil', onclick: () => paraDuzelt(donem, kayit) }, 'Tutarı düzelt'),
     ),
     el(
@@ -292,9 +305,10 @@ function anaEkran() {
       el('h2', {}, 'Yaklaşan ödemeler'),
       bekleyen.length
         ? bekleyen.slice(0, 5).map((k) => kalemKutusu(k, donem, bugun, anaEkran))
-        : el('p', { sinif: 'ipucu' }, veri.faturalar?.length ? 'Bu dönem bekleyen ödeme yok.' : 'Henüz fatura eklemedin.'),
+        : el('p', { sinif: 'ipucu' }, veri.faturalar?.length || veri.taksitler?.length ? 'Bu dönem bekleyen ödeme yok.' : 'Henüz ödeme eklemedin.'),
       bekleyen.length > 5 ? el('p', { sinif: 'ipucu' }, `${bekleyen.length - 5} ödeme daha var.`) : null,
       el('button', { type: 'button', sinif: 'ikincil bosluk', onclick: faturalarEkrani }, 'Faturalar'),
+      el('button', { type: 'button', sinif: 'ikincil', onclick: taksitlerEkrani }, 'Taksitler'),
     ),
     el('button', { type: 'button', sinif: 'ikincil', onclick: () => harcamalarEkrani() }, 'Harcamalar'),
     el('button', { type: 'button', sinif: 'ikincil', onclick: () => gelirlerEkrani() }, 'Gelirler'),
@@ -317,7 +331,7 @@ function durumYazisi(kalem, bugun) {
 function kalemKutusu(kalem, donem, bugun, geri, tamListe = false) {
   const dugmeler = [];
   if (bekliyorMu(kalem)) {
-    dugmeler.push(el('button', { type: 'button', onclick: () => odemeBaslat(kalem, donem, bugun, geri) }, '✓ Ödedim'));
+    dugmeler.push(el('button', { type: 'button', onclick: () => (kalem.taksitId ? taksitOdeFormu(kalem, donem, geri) : odemeBaslat(kalem, donem, bugun, geri)) }, '✓ Ödedim'));
     if (tamListe) {
       dugmeler.push(el('button', {
         type: 'button',
@@ -492,6 +506,193 @@ function faturaFormu(mevcut = null) {
       : null,
   );
   goster(ustBolum(mevcut ? 'Faturayı düzenle' : 'Fatura ekle', faturalarEkrani), form);
+}
+
+/* Taksitler */
+
+function ayYaz(ay) {
+  const [y, a] = ay.split('-').map(Number);
+  return new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y, a - 1, 1)));
+}
+
+function taksitOdeFormu(kalem, donem, geri) {
+  const taksit = veri.taksitler.find((t) => t.id === kalem.taksitId);
+  const { kalan } = taksitDurumu(veri, taksit);
+  const hata = hataSatiri();
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const kurus = paraCoz(form.elements.tutar.value);
+        if (!kurus) return hataGoster(hata, 'Sıfırdan büyük bir tutar yaz. Örnek: 100 ya da 1.250,50');
+        if (kurus > kalan) return hataGoster(hata, `Kalan borç ${paraYaz(kalan)}. Daha fazlası yazılamaz.`);
+        kaydetVeUyar(taksitOde(veri, donem.baslangic, kalem, kurus, bugunTR()));
+        geri();
+      },
+    },
+    tutarAlani('tutar', 'Bu ay ne kadar ödedin?', kalem.kurus ? paraYaz(kalem.kurus) : ''),
+    el('p', { sinif: 'ipucu' }, `Kalan borç: ${paraYaz(kalan)}. Farklı tutar ödediysen onu yaz, kalan taksitler yeniden hesaplanır.`),
+    hata,
+    el('button', { type: 'submit' }, 'Ödedim'),
+  );
+  goster(ustBolum(kalem.ad, geri), form);
+}
+
+function taksitKarti(taksit, donem, bugun) {
+  const durum = taksitDurumu(veri, taksit);
+  const siradaki = bekleyenTaksitler(veri, taksit, gunEkle(bugun, 400), bugun)[0];
+  const bitis = taksitBitisi(veri, taksit, bugun);
+  return el(
+    'section',
+    { sinif: 'kart' },
+    satir(taksit.ad, taksit.sayi ? `${Math.min(durum.odenenAdet, taksit.sayi)}/${taksit.sayi}` : ''),
+    satir('Ödenen', paraYaz(durum.odenen)),
+    satir('Kalan', paraYaz(durum.kalan)),
+    kategoriCubugu(durum.odenen, taksit.toplam),
+    durum.kalan === 0
+      ? el('p', { sinif: 'ipucu' }, '✓ Tamamlandı')
+      : siradaki
+        ? el('p', { sinif: siradaki.durum === 'gecikti' ? 'ipucu gecikti' : 'ipucu' }, `${siradaki.durum === 'gecikti' ? 'Gecikti' : 'Sıradaki'}: ${siradaki.kurus === null ? 'Tutar sende' : paraYaz(siradaki.kurus)} · ${tarihYaz(siradaki.vade)}`)
+        : null,
+    bitis ? el('p', { sinif: 'ipucu' }, `${taksit.tur === 'sabit' ? 'Bitiş' : 'Tahmini bitiş'}: ${ayYaz(bitis)}`) : null,
+    siradaki && siradaki.vade <= donem.bitis
+      ? el('button', { type: 'button', onclick: () => taksitOdeFormu(siradaki, donem, taksitlerEkrani) }, '✓ Ödedim')
+      : null,
+    el('button', { type: 'button', sinif: 'ikincil', onclick: () => taksitDetayi(taksit.id) }, 'Ödeme geçmişi ve düzenle'),
+  );
+}
+
+function taksitlerEkrani() {
+  const bugun = bugunTR();
+  const donem = donemBul(veri.ayar, bugun);
+  if (!veri.donemler[donem.baslangic]) return anaEkran();
+
+  const taksitler = veri.taksitler ?? [];
+  const biten = (t) => taksitDurumu(veri, t).kalan === 0;
+  const devam = taksitler.filter((t) => !biten(t));
+  const tamam = taksitler.filter(biten);
+  const aylar = gelecekAylar(veri, bugun);
+  const enBuyuk = Math.max(...aylar.map((a) => a.kurus));
+  goster(
+    ustBolum('Taksitler', anaEkran),
+    bilgiSatiri(),
+    el('button', { type: 'button', onclick: () => taksitFormu() }, '+ Taksit ekle'),
+    devam.length
+      ? el(
+          'section',
+          { sinif: 'kart vurgulu bosluk' },
+          el('h2', {}, 'Önümüzdeki aylar'),
+          el('p', { sinif: 'ipucu' }, `Gelecek ay: ${paraYaz(aylar[1].kurus)}`),
+          aylar.map((a) => [satir(ayYaz(a.ay), paraYaz(a.kurus)), enBuyuk ? kategoriCubugu(a.kurus, enBuyuk) : null]),
+        )
+      : el('p', { sinif: 'ipucu bosluk' }, 'Devam eden taksit yok.'),
+    devam.map((t) => taksitKarti(t, donem, bugun)),
+    tamam.length ? el('h2', { sinif: 'bosluk' }, 'Tamamlandı') : null,
+    tamam.map((t) => taksitKarti(t, donem, bugun)),
+  );
+}
+
+function taksitDetayi(id) {
+  const taksit = veri.taksitler.find((t) => t.id === id);
+  const donem = donemBul(veri.ayar, bugunTR());
+  const { odemeler } = taksitDurumu(veri, taksit);
+  goster(
+    ustBolum(taksit.ad, taksitlerEkrani),
+    bilgiSatiri(),
+    el(
+      'section',
+      { sinif: 'kart' },
+      el('h2', {}, 'Ödeme geçmişi'),
+      taksit.onceki ? satir('Uygulamadan önce ödenen', paraYaz(taksit.onceki)) : null,
+      odemeler.length
+        ? [...odemeler].reverse().map((h) => el(
+            'div',
+            { sinif: 'kalem' },
+            satir(tarihYaz(h.tarih), paraYaz(h.kurus)),
+            h.baslangic === donem.baslangic
+              ? el('button', {
+                  type: 'button',
+                  sinif: 'ikincil',
+                  onclick: () => {
+                    kaydetVeUyar(taksitOdemeGeriAl(veri, h.baslangic, id, h.ay));
+                    taksitDetayi(id);
+                  },
+                }, 'Geri al')
+              : null,
+          ))
+        : el('p', { sinif: 'ipucu' }, 'Henüz ödeme yok.'),
+    ),
+    el('button', { type: 'button', sinif: 'ikincil', onclick: () => taksitFormu(taksit) }, 'Taksiti düzenle'),
+  );
+}
+
+function taksitFormu(mevcut = null) {
+  const bugun = bugunTR();
+  const donem = donemBul(veri.ayar, bugun);
+  const hata = hataSatiri();
+  const tur = el(
+    'select',
+    { id: 'tur' },
+    el('option', { value: 'sabit', selected: mevcut?.tur !== 'degisken' }, 'Her ay aynı tutar (sabit)'),
+    el('option', { value: 'degisken', selected: mevcut?.tur === 'degisken' }, 'Her ay farklı tutar (değişken)'),
+  );
+  const gun = gunSecici('gun', mevcut?.gun);
+  const form = el(
+    'form',
+    {
+      onsubmit: (o) => {
+        o.preventDefault();
+        const ad = form.elements.ad.value.trim();
+        if (!ad) return hataGoster(hata, 'Ne aldığını yaz.');
+        const toplam = paraCoz(form.elements.toplam.value);
+        if (!toplam) return hataGoster(hata, 'Toplam tutarı yaz. Örnek: 25.000');
+        const sayiMetni = form.elements.sayi.value.trim();
+        const sayi = sayiMetni ? Number(sayiMetni) : undefined;
+        if (sayi !== undefined && (!Number.isInteger(sayi) || sayi < 1 || sayi > 120)) return hataGoster(hata, 'Taksit sayısı 1 ile 120 arasında olmalı.');
+        if (tur.value === 'sabit' && sayi === undefined) return hataGoster(hata, 'Sabit taksit için taksit sayısını yaz.');
+        if (!gun.value) return hataGoster(hata, 'Ödeme gününü seç.');
+        const oncekiMetni = form.elements.onceki.value.trim();
+        const onceki = oncekiMetni ? paraCoz(oncekiMetni) : undefined;
+        if (onceki === null || onceki >= toplam) return hataGoster(hata, 'Daha önce ödenen tutar, toplamdan az olmalı.');
+
+        const bilgiler = { ad, toplam, tur: tur.value, sayi, gun: Number(gun.value), onceki: onceki || undefined };
+        if (mevcut) {
+          kaydetVeUyar(taksitGuncelle(veri, mevcut.id, bilgiler));
+        } else {
+          const id = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+          kaydetVeUyar(taksitEkle(veri, { id, ...bilgiler, ilkAy: baslangicAyi(bilgiler.gun, bugun, donem.baslangic).ilkAy }));
+        }
+        taksitlerEkrani();
+      },
+    },
+    el('label', { htmlFor: 'ad' }, 'Ne aldın?'),
+    el('input', { id: 'ad', name: 'ad', maxLength: 40, placeholder: 'Örnek: Tablet', value: mevcut?.ad ?? '', autocomplete: 'off' }),
+    tutarAlani('toplam', 'Toplam ödeyeceğin tutar', mevcut ? paraYaz(mevcut.toplam) : ''),
+    el('p', { sinif: 'ipucu' }, 'Vade farkı varsa onu da ekle. Ürün fiyatını değil, toplam ödeyeceğin tutarı yaz.'),
+    el('label', { htmlFor: 'tur' }, 'Taksit tipi'),
+    tur,
+    el('label', { htmlFor: 'sayi' }, 'Taksit sayısı (değişkende boş bırakabilirsin)'),
+    el('input', { id: 'sayi', name: 'sayi', type: 'text', inputMode: 'numeric', autocomplete: 'off', placeholder: 'Örnek: 5', value: mevcut?.sayi ?? '' }),
+    el('label', { htmlFor: 'gun' }, 'Her ayın ödeme günü'),
+    gun,
+    el('p', { sinif: 'ipucu' }, 'Ay kısa çekerse ayın son günü sayılır.'),
+    tutarAlani('onceki', 'Daha önce ödediğin tutar (varsa)', mevcut?.onceki ? paraYaz(mevcut.onceki) : ''),
+    hata,
+    el('button', { type: 'submit' }, 'Kaydet'),
+    mevcut
+      ? el('button', {
+          type: 'button',
+          sinif: 'tehlike',
+          onclick: () => {
+            if (!window.confirm('Taksit silinsin mi? Ödenmiş kayıtlar Geçmiş bölümünde kalır.')) return;
+            kaydetVeUyar(taksitSil(veri, mevcut.id));
+            taksitlerEkrani();
+          },
+        }, 'Taksiti sil')
+      : null,
+  );
+  goster(ustBolum(mevcut ? 'Taksiti düzenle' : 'Taksit ekle', mevcut ? () => taksitDetayi(mevcut.id) : taksitlerEkrani), form);
 }
 
 /* Harcamalar */
@@ -954,7 +1155,8 @@ function gecmisEkrani() {
       satir('Gelir', paraYaz(hareketToplami(kayit, 'gelir'))),
       satir('Harcama', paraYaz(hareketToplami(kayit, 'harcama'))),
       satir('Faturalar', paraYaz(hareketToplami(kayit, 'fatura'))),
-      (kayit.hareketler ?? []).filter((h) => h.tur === 'fatura').map((h) => el('p', { sinif: 'ipucu' }, `✓ ${h.ad}: ${paraYaz(h.kurus)}`)),
+      satir('Taksitler', paraYaz(hareketToplami(kayit, 'taksit'))),
+      (kayit.hareketler ?? []).filter((h) => h.tur === 'fatura' || h.tur === 'taksit').map((h) => el('p', { sinif: 'ipucu' }, `✓ ${h.ad}: ${paraYaz(h.kurus)}`)),
       satir('Dönem sonu', paraYaz(kalanPara(kayit))),
       hareketToplami(kayit, 'harcama')
         ? el('button', { type: 'button', sinif: 'ikincil bosluk', onclick: () => harcamalarEkrani(tarih) }, 'Harcamaları gör')

@@ -20,7 +20,11 @@ function gonder(window, form) {
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
 }
 
-const metin = (window) => window.document.getElementById('uygulama').textContent;
+const metin = (window) => {
+  const yazi = window.document.getElementById('uygulama').textContent;
+  assert.doesNotMatch(yazi, /\[object |null|undefined/);
+  return yazi;
+};
 
 test('ilk kurulum: ad, maaş günü ve para ile ana ekrana gelir', async () => {
   const window = await uygulamaAc();
@@ -165,7 +169,7 @@ test('fatura eklenir, serbest para azalır, ödenince geri alınabilir', async (
   const { document } = window;
   const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
 
-  assert.match(metin(window), /Henüz fatura eklemedin/);
+  assert.match(metin(window), /Henüz ödeme eklemedin/);
   dugme('Faturalar').click();
   dugme('+ Fatura ekle').click();
 
@@ -196,7 +200,7 @@ test('fatura eklenir, serbest para azalır, ödenince geri alınabilir', async (
 
   document.querySelector('[aria-label="Geri"]').click();
   assert.equal(document.getElementById('ana-para').textContent, '700,00 TL');
-  assert.match(metin(window), /Faturalara ayrıldı300,00 TL/);
+  assert.match(metin(window), /Ödemelere ayrıldı300,00 TL/);
   assert.match(metin(window), /Toplam para1\.000,00 TL/);
 });
 
@@ -209,7 +213,7 @@ test('değişken fatura ödenirken tutar sorulur, Geçmiş\'te görünür', asyn
   const { document } = window;
   const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
 
-  assert.match(metin(window), /1 faturanın tutarı henüz belli değil/);
+  assert.match(metin(window), /1 ödemenin tutarı henüz belli değil/);
   dugme('✓ Ödedim').click();
   gonder(window, document.querySelector('form'));
   assert.match(metin(window), /Sıfırdan büyük/);
@@ -421,6 +425,57 @@ test('ek gelir kaynak ve notla eklenir, düzeltilir, silinir, Geçmiş\'te kalı
   assert.match(metin(window), /Hediye7,00 TL/);
   assert.equal(dugme('Düzenle'), undefined);
   assert.equal(dugme('+ Gelir'), undefined);
+});
+
+test('taksit eklenir, ayrılır, ödenir, geri alınır, biter', async () => {
+  const ayar = ilkAyar(15);
+  const bugun = bugunTR();
+  const baslangic = donemBul(ayar, bugun).baslangic;
+  const window = await uygulamaAc(JSON.stringify({ surum: 1, ad: 'Ev', ayar, donemler: { [baslangic]: { para: 3000000, hareketler: [] } } }));
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
+
+  dugme('Taksitler').click();
+  assert.doesNotMatch(metin(window), /null|undefined/);
+  dugme('+ Taksit ekle').click();
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Ne aldığını yaz/);
+  document.getElementById('ad').value = 'Tablet';
+  document.getElementById('toplam').value = '10.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /taksit sayısını yaz/);
+  document.getElementById('sayi').value = '2';
+  document.getElementById('gun').value = String(Number(bugun.slice(8)));
+  gonder(window, document.querySelector('form'));
+
+  assert.equal(kayit().taksitler[0].toplam, 1000000);
+  assert.match(metin(window), /Tablet0\/2/);
+  assert.match(metin(window), /Kalan10\.000,00 TL/);
+  assert.match(metin(window), /Önümüzdeki aylar/);
+  assert.doesNotMatch(metin(window), /null|undefined/);
+
+  dugme('✓ Ödedim').click();
+  assert.equal(document.getElementById('tutar').value, '5.000,00 TL');
+  document.getElementById('tutar').value = '20.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Daha fazlası yazılamaz/);
+  document.getElementById('tutar').value = '4.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /Tablet1\/2/);
+  assert.match(metin(window), /Kalan6\.000,00 TL/);
+  assert.equal(kayit().donemler[baslangic].hareketler[0].tur, 'taksit');
+
+  dugme('Ödeme geçmişi ve düzenle').click();
+  dugme('Geri al').click();
+  assert.equal(kayit().donemler[baslangic].hareketler.length, 0);
+  assert.match(metin(window), /Henüz ödeme yok/);
+  dugme('Taksiti düzenle').click();
+  document.getElementById('onceki').value = '10.000';
+  gonder(window, document.querySelector('form'));
+  assert.match(metin(window), /toplamdan az olmalı/);
+  dugme('Taksiti sil').click();
+  assert.equal(kayit().taksitler.length, 0);
 });
 
 test('para eksiye düşerse açıkça yazar', async () => {
