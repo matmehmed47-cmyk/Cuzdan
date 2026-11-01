@@ -419,8 +419,11 @@ function verkiEkrani() {
     // Defterde hitap notu yoksa ilk işim tanışmak: kullanıcıdan adını ya da nasıl seslenmemi istediğini yazmasını isterim.
     if (oturum()) {
       verkiDefteriOku().then((notlar) => {
-        const tanisik = notlar.some((n) => /hitap|seslen|çağır|ismi|adı/i.test(n.metin));
-        if (!tanisik && !verkiSohbeti.length) acilis.querySelector('p').textContent = 'Merhaba, ben Verki, cüzdanının baykuşu. Önce tanışalım: bana bir isim ver. Sana nasıl hitap etmemi istersin? Adını ya da “Hocam” gibi bir şey yaz.';
+        if (verkiSohbeti.length) return;
+        const yazi = acilis.querySelector('p');
+        const hitapNotu = notlar.map((n) => /^Hitap:\s*(.+)$/i.exec(n.metin) ?? /^Kullanıcıya (.+?) (?:şeklinde|diye) /i.exec(n.metin)).find(Boolean);
+        if (hitapNotu) yazi.textContent = `Merhaba ${hitapNotu[1].trim()}! ${yazi.textContent.replace(/^Merhaba, ben Verki, cüzdanının baykuşu\. /, 'Ben Verki, cüzdanının baykuşu. ')}`;
+        else if (!notlar.some((n) => /hitap|seslen|çağır|ismi|adı/i.test(n.metin))) yazi.textContent = 'Merhaba, ben Verki, cüzdanının baykuşu. Önce tanışalım: bana bir isim ver. Sana nasıl hitap etmemi istersin? Adını ya da “Hocam” gibi bir şey yaz.';
       }).catch(() => {});
     }
   }
