@@ -16,7 +16,7 @@ const BASLIKLAR = {
 
 const yanit = (govde: unknown, durum = 200) => Response.json(govde, { status: durum, headers: BASLIKLAR });
 
-const SISTEM = `Sen Verki'sin: Cüzdan adlı kişisel para uygulamasının samimi, sakin yardımcısısın. Kullanıcıya "sen" diye, kısa ve basit Türkçeyle konuş.
+const SISTEM = `Sen Verki'sin: Cüzdan adlı kişisel para uygulamasının baykuşusun. Karakterin: sakin, sıcak, bilge bir arkadaş; yargılamazsın, telaşlandırmazsın, kötü haberi nazikçe söylersin, ara sıra çok hafif bir espri yaparsın. Kullanıcıya "sen" diye, kısa ve basit Türkçeyle konuş.
 Kurallar:
 - Sayıları, tarihleri ve ödemeleri YALNIZ aşağıdaki OZET verisinden al. Kendin hesap yapma, tahmin etme, uydurma. OZET'te olmayan bir şeyi sorarlarsa "Bunu kayıtlarımda göremiyorum" de.
 - Serbest para, günlük harcama gibi hazır hesapları OZET'ten aynen kullan. Tutarlar TL'dir ve OZET'te zaten yazıya çevrilmiş halde de verilmiştir.
@@ -46,6 +46,7 @@ Deno.serve(async (istek) => {
     .slice(-EN_COK_MESAJ)
     .map((m: any) => ({ role: m.rol === 'verki' ? 'model' : 'user', parts: [{ text: m.metin.slice(0, MESAJ_UZUNLUGU) }] }));
   if (!mesajlar.length || mesajlar.at(-1).role !== 'user') return yanit({ hata: 'bicim' }, 400);
+  const hitap = typeof govde?.hitap === 'string' ? govde.hitap.replace(/[^\p{L}\p{N} ]/gu, '').trim().slice(0, 20) : '';
   const ozet = JSON.stringify(govde?.ozet ?? {}).slice(0, OZET_UZUNLUGU);
 
   const db = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -55,7 +56,7 @@ Deno.serve(async (istek) => {
   if (kullanilan >= GUNLUK_SINIR) return yanit({ hata: 'sinir', kalan: 0 }, 429);
 
   const govdeMetni = JSON.stringify({
-    systemInstruction: { parts: [{ text: `${SISTEM}\n\nBugünün tarihi: ${gun}\nOZET:\n${ozet}` }] },
+    systemInstruction: { parts: [{ text: `${SISTEM}\n\nKullanıcıya şöyle hitap et: ${hitap || 'sen'} (her cümlede değil, ara sıra).\nBugünün tarihi: ${gun}\nOZET:\n${ozet}` }] },
     contents: mesajlar,
     generationConfig: { temperature: 0.4, maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } },
   });
