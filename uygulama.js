@@ -303,7 +303,6 @@ function verkiEkrani() {
       return;
     }
     hitapYaz(ad);
-    liste.querySelector('.verki-hitaplar')?.remove();
     verkiDedi({ metin: `Memnun oldum ${ad}! Ödemelerini, serbest paranı, harcamalarını sorabilirsin. Yaz ya da mikrofona dokunup söyle.` });
   };
 
@@ -413,8 +412,7 @@ function verkiEkrani() {
   if (!verkiSohbeti.length) {
     const hitap = hitapOku();
     if (!hitap) {
-      liste.append(balon({ rol: 'verki', metin: 'Merhaba, ben Verki, cüzdanının baykuşu. Sana nasıl hitap edeyim? Aşağıdan seç ya da adını yaz.' }));
-      liste.append(el('div', { sinif: 'verki-hitaplar' }, ['Hocam', 'Kral', 'Abi', 'Dostum'].map((ad) => el('button', { type: 'button', sinif: 'verki-soru', onclick: () => { verkiSohbeti.push({ rol: 'kullanici', metin: ad }); ekle({ rol: 'kullanici', metin: ad }); hitapSec(ad); } }, ad))));
+      liste.append(balon({ rol: 'verki', metin: 'Merhaba, ben Verki, cüzdanının baykuşu. Sana nasıl hitap etmemi istersin? Aşağıya yaz, mesela adını ya da “Hocam” gibi.' }));
     } else {
       liste.append(balon({
         rol: 'verki',
