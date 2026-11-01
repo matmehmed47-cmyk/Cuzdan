@@ -67,3 +67,13 @@ grant execute on function public.cuzdan_kaydet(jsonb, bigint), public.hesabimi_s
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
+
+-- Verki sohbetinin günlük soru sayacı; yalnız sunucu işlevi yazar.
+create table if not exists public.verki_kullanim (
+  kullanici uuid not null references auth.users (id) on delete cascade,
+  gun date not null,
+  sayi int not null default 0,
+  primary key (kullanici, gun)
+);
+alter table public.verki_kullanim enable row level security;
+revoke all on public.verki_kullanim from anon, authenticated, public;

@@ -28,6 +28,7 @@ import {
   sifreDegistir,
   uzagaYaz,
   uzaktanOku,
+  verkiSor,
 } from './bulut.js';
 import {
   atlamaGeriAl,
@@ -114,7 +115,7 @@ import { sesAyarla, sesCal } from './sesler.js';
 import { imzaSvg } from './imza.js';
 import { BIRIMLER, birimBul, cevir, gerekli } from './cevirici.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
-import { SORULAR, soruAnla, verkiCevabi } from './verki.js';
+import { SORULAR, soruAnla, verkiCevabi, verkiOzeti } from './verki.js';
 import { konusmaCoz } from './ses.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
 import {
@@ -237,16 +238,70 @@ function altMenu(aktif) {
   );
 }
 
-function verkiEkrani(secili = null, duyulan = '') {
+let verkiSohbeti = [];
+
+function verkiEkrani() {
   const bugun = bugunTR();
-  const cevap = secili ? verkiCevabi(secili, veri, bugun) : null;
-  const anlamadi = duyulan && !secili;
-  const sor = (metin) => {
-    const temiz = metin.trim();
-    if (temiz) verkiEkrani(soruAnla(temiz), temiz);
-  };
+  const liste = el('div', { sinif: 'verki-sohbet', 'aria-live': 'polite' });
+  const durum = el('p', { sinif: 'ipucu', role: 'status' });
   const kutu = el('textarea', { id: 'verki-soru', name: 'verki-soru', rows: 1, autocomplete: 'off', enterKeyHint: 'send', placeholder: 'Verki’ye yaz…' });
-  kutu.value = duyulan;
+  const gonderDugme = el('button', { type: 'submit', sinif: 'verki-gonder', 'aria-label': 'Gönder' }, ikon('gonder'));
+
+  const balon = (m) => el(
+    'div',
+    { sinif: m.rol === 'verki' ? 'verki-balon verki' : 'verki-balon sen' },
+    el('p', {}, m.metin),
+    (m.satirlar ?? []).length ? el('div', { sinif: 'verki-satirlar' }, m.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null))) : null,
+  );
+  const ekle = (m) => {
+    const dugum = balon(m);
+    liste.append(dugum);
+    dugum.scrollIntoView?.({ block: 'end', behavior: 'smooth' });
+    return dugum;
+  };
+  const verkiDedi = (m) => {
+    verkiSohbeti.push({ rol: 'verki', ...m });
+    return ekle({ rol: 'verki', ...m });
+  };
+  const yerelCevap = (kod) => {
+    const cevap = verkiCevabi(kod, veri, bugun);
+    return { metin: cevap.ozet, satirlar: cevap.satirlar };
+  };
+
+  // Hazır sorular ve internetsiz durum uygulamanın kendi hesabıyla, serbest sohbet yapay zekâyla cevaplanır.
+  const sor = async (metin, hazirKod = null) => {
+    const temiz = metin.trim();
+    if (!temiz || gonderDugme.disabled) return;
+    kutu.value = '';
+    kutu.style.height = 'auto';
+    durum.textContent = '';
+    verkiSohbeti.push({ rol: 'kullanici', metin: temiz });
+    ekle({ rol: 'kullanici', metin: temiz });
+    const kod = hazirKod ?? (oturum() ? null : soruAnla(temiz));
+    if (kod) {
+      verkiDedi(yerelCevap(kod));
+      return;
+    }
+    if (!oturum()) {
+      verkiDedi({ metin: 'Serbest sohbet için hesapla giriş yapman lazım (Ayarlar). Şimdilik aşağıdaki hazır sorulara cevap verebilirim.' });
+      return;
+    }
+    gonderDugme.disabled = true;
+    const bekleme = ekle({ rol: 'verki', metin: 'Yazıyor…' });
+    try {
+      const gecmis = verkiSohbeti.slice(-9).map((m) => ({ rol: m.rol, metin: m.metin }));
+      const { cevap } = await verkiSor(gecmis, verkiOzeti(veri, bugun));
+      bekleme.remove();
+      verkiDedi({ metin: cevap });
+    } catch (hata) {
+      bekleme.remove();
+      const yedek = soruAnla(temiz);
+      verkiDedi(yedek ? { ...yerelCevap(yedek), metin: `${hata.message} Elimdeki kayıtlardan bakayım: ${yerelCevap(yedek).metin}` } : { metin: hata.message });
+    } finally {
+      gonderDugme.disabled = false;
+    }
+  };
+
   // Yazı satır sonunda aşağı kayar; kutu 5 satıra kadar büyür, sonra içinde kaydırılır.
   const boyutla = () => {
     kutu.style.height = 'auto';
@@ -266,8 +321,8 @@ function verkiEkrani(secili = null, duyulan = '') {
   };
   gorunum?.addEventListener('resize', klavyeyeUy);
   gorunum?.addEventListener('scroll', klavyeyeUy);
+
   const Tanima = sesDestegi();
-  const sesDurumu = el('p', { sinif: 'ipucu', role: 'status' });
   const mikrofon = Tanima
     ? el('button', {
         type: 'button',
@@ -284,62 +339,48 @@ function verkiEkrani(secili = null, duyulan = '') {
           tanima.lang = 'tr-TR';
           tanima.interimResults = false;
           tanima.maxAlternatives = 1;
-          tanima.onresult = (olay) => {
-            dugme.classList.remove('dinliyor');
-            sor(olay.results[0][0].transcript);
-          };
           const bitir = () => {
             dugme.classList.remove('dinliyor');
             kutu.placeholder = 'Verki’ye yaz…';
           };
+          tanima.onresult = (sonuc) => {
+            bitir();
+            sor(sonuc.results[0][0].transcript);
+          };
           tanima.onerror = () => {
             bitir();
-            sesDurumu.textContent = 'Ses alınamadı. Mikrofon iznini kontrol et ya da yaz.';
+            durum.textContent = 'Ses alınamadı. Mikrofon iznini kontrol et ya da yaz.';
           };
           tanima.onend = () => {
             if (dugme.classList.contains('dinliyor')) {
               bitir();
-              sesDurumu.textContent = 'Bir şey duymadım. Tekrar dene.';
+              durum.textContent = 'Bir şey duymadım. Tekrar dene.';
             }
           };
           dugme.classList.add('dinliyor');
           kutu.placeholder = 'Dinliyorum, konuş…';
-          sesDurumu.textContent = '';
+          durum.textContent = '';
           titret(10);
           tanima.start();
         },
       }, ikon('mikrofon'))
     : null;
+
+  for (const m of verkiSohbeti) liste.append(balon(m));
+  if (!verkiSohbeti.length) {
+    liste.append(balon({
+      rol: 'verki',
+      metin: oturum() ? 'Merhaba, ben Verki. Paranla ilgili ne istersen sor: ödemelerin, serbest paran, harcamaların… Yaz ya da mikrofona dokunup söyle.' : 'Merhaba, ben Verki. Aşağıdaki hazır sorulara cevap verebilirim. Serbest sohbet için hesapla giriş yapman lazım (Ayarlar).',
+    }));
+  }
+
   goster(
     ustBolum('Verki', anaEkran),
-    el(
-      'section',
-      { sinif: 'kart verki-kart' },
-      el('span', { sinif: 'verki-simge', 'aria-hidden': 'true' }, ikon('verki')),
-      el('div', {}, el('h2', {}, 'Merhaba, ben Verki'), el('p', { sinif: 'ipucu' }, 'Paranla ilgili sorularını cevaplarım. Sayıları senin kayıtlarından hesaplarım.')),
-    ),
-    sesDurumu,
-    cevap
-      ? el(
-          'section',
-          { sinif: 'kart bosluk', role: 'status' },
-          el('p', { sinif: 'verki-cevap' }, cevap.ozet),
-          cevap.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null)),
-        )
-      : el('p', { sinif: 'ipucu orta bosluk' }, anlamadi ? `“${duyulan}” sorusunu tam anlayamadım. Aşağıdaki sorulardan birine dokun ya da “bugün”, “bu hafta”, “serbest param” gibi yaz.` : 'Yaz, söyle ya da bir soruya dokun.'),
-    el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', {
-      type: 'button',
-      sinif: kod === secili ? 'verki-soru secili' : 'verki-soru',
-      'aria-pressed': String(kod === secili),
-      onclick: () => verkiEkrani(kod),
-    }, soru))),
-    el(
-      'form',
-      { sinif: 'verki-yaz', onsubmit: (olay) => { olay.preventDefault(); sor(kutu.value); } },
-      kutu,
-      mikrofon,
-      el('button', { type: 'submit', sinif: 'verki-gonder', 'aria-label': 'Gönder' }, ikon('gonder')),
-    ),
+    el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', { type: 'button', sinif: 'verki-soru', onclick: () => sor(soru, kod) }, soru))),
+    liste,
+    durum,
+    oturum() ? el('p', { sinif: 'ipucu orta verki-not' }, 'Yazdığın soru ve bu dönemin özeti (ödemeler, harcama toplamları) cevap için Google Gemini’ye gider. İsim ve e-postan gitmez. Günde 30 soru sınırı var.') : null,
+    el('form', { sinif: 'verki-yaz', onsubmit: (olay) => { olay.preventDefault(); sor(kutu.value); } }, kutu, mikrofon, gonderDugme),
   );
   kok.classList.add('verki-sayfa');
   klavyeyeUy();

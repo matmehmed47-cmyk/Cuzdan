@@ -1108,9 +1108,57 @@ button.verki-dugme .ikon svg {
 
 .verki-sorular {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+  margin: 14px -16px 0;
+  padding: 0 16px 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+button.verki-soru {
+  flex: none;
+}
+
+.verki-sohbet {
+  display: grid;
+  gap: 10px;
   margin: 14px 0 0;
+}
+
+.verki-balon {
+  max-width: 88%;
+  padding: 11px 14px;
+  border: 1px solid var(--cizgi);
+  border-radius: 18px;
+  background: var(--yuzey);
+  scroll-margin-bottom: 120px;
+}
+
+.verki-balon p {
+  margin: 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.verki-balon.sen {
+  justify-self: end;
+  border-color: transparent;
+  border-bottom-right-radius: 6px;
+  background: var(--ana);
+  color: #ffffff;
+}
+
+.verki-balon.verki {
+  border-bottom-left-radius: 6px;
+}
+
+.verki-satirlar {
+  margin-top: 8px;
+}
+
+.verki-not {
+  font-size: 0.75rem;
 }
 
 button.verki-soru {

@@ -147,6 +147,27 @@ export async function planGonder(plan) {
   }, erisim);
 }
 
+// Verki sohbeti: soru ve dönem özeti sunucuya gider, anahtar yalnız sunucuda durur.
+export async function verkiSor(mesajlar, ozet) {
+  const { erisim } = await erisimAl();
+  let cevap;
+  try {
+    cevap = await window.fetch(`${ADRES}/functions/v1/verki`, {
+      method: 'POST',
+      headers: { apikey: ANAHTAR, 'Content-Type': 'application/json', Authorization: `Bearer ${erisim}` },
+      body: JSON.stringify({ mesajlar, ozet }),
+    });
+  } catch {
+    throw new BulutHatasi('İnternet bağlantısı yok.', 'baglanti');
+  }
+  const govde = await cevap.json().catch(() => null);
+  if (!cevap.ok || !govde?.cevap) {
+    const kod = govde?.hata ?? String(cevap.status);
+    throw new BulutHatasi(kod === 'sinir' ? 'Bugünkü soru hakkın doldu, yarın yine sorabilirsin.' : 'Verki şu an cevap veremiyor.', kod);
+  }
+  return govde;
+}
+
 export async function gonderilenleriOku() {
   const { erisim } = await erisimAl();
   const satirlar = await istek('/rest/v1/bildirim_planlari?select=gonderilen', {}, erisim);

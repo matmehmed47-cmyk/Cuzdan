@@ -115,3 +115,31 @@ export function verkiCevabi(kod, veri, bugun) {
   }
   return { ozet: 'Bunu henüz bilmiyorum.', satirlar: [] };
 }
+
+// Yapay zekâya giden özet: hazır hesaplanmış sayılar ve kısa listeler. İsim, e-posta ve not metni gitmez.
+export function verkiOzeti(veri, bugun) {
+  const donem = donemBul(veri.ayar, bugun);
+  const kayit = veri.donemler[donem.baslangic];
+  if (!kayit) return { bugun, not: 'Bu dönemin kaydı yok.' };
+  const hesap = serbestParaHesabi(veri, donem, bugun);
+  const kalanGun = Math.max(gunFarki(bugun, donem.sonraki), 1);
+  const toplamlar = kategoriToplamlari(kayit);
+  const harcamalar = (kayit.hareketler ?? []).filter((h) => h.tur === 'harcama').sort((a, b) => b.tarih.localeCompare(a.tarih));
+  return {
+    bugun,
+    donem: { baslangic: donem.baslangic, sonrakiMaasGunu: donem.sonraki, maasaKalanGun: kalanGun },
+    eldekiPara: paraYaz(hesap.eldeki),
+    odemelereAyrilan: paraYaz(hesap.ayrilan),
+    koseyeAyrilan: paraYaz(hesap.kose),
+    serbestPara: paraYaz(hesap.serbest),
+    gunlukHarcamaSiniri: hesap.serbest > 0 ? paraYaz(Math.floor(hesap.serbest / kalanGun)) : 'serbest para yok',
+    bekleyenOdemeler: bekleyenler(veri, donem, gunEkle(bugun, 35), bugun).slice(0, 25).map((k) => {
+      const fark = gunFarki(bugun, k.vade);
+      return { ad: k.ad, tutar: k.kurus === null ? 'belli değil' : paraYaz(k.kurus), vade: k.vade, durum: fark < 0 ? `${-fark} gün gecikti` : fark === 0 ? 'bugün' : `${fark} gün sonra` };
+    }),
+    buDonemHarcamaToplami: paraYaz(harcamalar.reduce((t, h) => t + h.kurus, 0)),
+    kategoriToplamlari: toplamlar.slice(0, 10).map((k) => ({ kategori: k.ad, tutar: paraYaz(k.kurus) })),
+    sonHarcamalar: harcamalar.slice(0, 15).map((h) => ({ tarih: h.tarih, tutar: paraYaz(h.kurus), kategori: h.kategori ?? 'Diğer' })),
+    aylikHedef: veri.hedef ? paraYaz(veri.hedef) : null,
+  };
+}
