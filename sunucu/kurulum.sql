@@ -77,3 +77,16 @@ create table if not exists public.verki_kullanim (
 );
 alter table public.verki_kullanim enable row level security;
 revoke all on public.verki_kullanim from anon, authenticated, public;
+
+-- Verki'nin kişiye özel defteri: yalnız sahibi görür ve siler, notu sunucu işlevi yazar.
+create table if not exists public.verki_defteri (
+  id bigint generated always as identity primary key,
+  kullanici uuid not null references auth.users (id) on delete cascade,
+  metin text not null check (char_length(metin) <= 200),
+  olusturuldu timestamptz not null default now()
+);
+alter table public.verki_defteri enable row level security;
+revoke all on public.verki_defteri from anon, public;
+grant select, delete on public.verki_defteri to authenticated;
+create policy "defter_oku" on public.verki_defteri for select to authenticated using (kullanici = auth.uid());
+create policy "defter_sil" on public.verki_defteri for delete to authenticated using (kullanici = auth.uid());

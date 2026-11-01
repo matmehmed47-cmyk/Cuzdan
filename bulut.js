@@ -148,14 +148,14 @@ export async function planGonder(plan) {
 }
 
 // Verki sohbeti: soru ve dönem özeti sunucuya gider, anahtar yalnız sunucuda durur.
-export async function verkiSor(mesajlar, ozet, hitap = '') {
+export async function verkiSor(mesajlar, ozet) {
   const { erisim } = await erisimAl();
   let cevap;
   try {
     cevap = await window.fetch(`${ADRES}/functions/v1/verki`, {
       method: 'POST',
       headers: { apikey: ANAHTAR, 'Content-Type': 'application/json', Authorization: `Bearer ${erisim}` },
-      body: JSON.stringify({ mesajlar, ozet, hitap }),
+      body: JSON.stringify({ mesajlar, ozet }),
     });
   } catch {
     throw new BulutHatasi('İnternet bağlantısı yok.', 'baglanti');
@@ -166,6 +166,16 @@ export async function verkiSor(mesajlar, ozet, hitap = '') {
     throw new BulutHatasi(kod === 'sinir' ? 'Bugünkü soru hakkın doldu, yarın yine sorabilirsin.' : 'Verki şu an cevap veremiyor.', kod);
   }
   return govde;
+}
+
+export async function verkiDefteriOku() {
+  const { erisim } = await erisimAl();
+  return istek('/rest/v1/verki_defteri?select=id,metin&order=id', {}, erisim);
+}
+
+export async function verkiDefteriSil(id) {
+  const { erisim } = await erisimAl();
+  await istek(`/rest/v1/verki_defteri?id=eq.${Number(id)}`, { method: 'DELETE' }, erisim);
 }
 
 export async function gonderilenleriOku() {

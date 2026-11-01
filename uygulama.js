@@ -29,6 +29,8 @@ import {
   uzagaYaz,
   uzaktanOku,
   verkiSor,
+  verkiDefteriOku,
+  verkiDefteriSil,
 } from './bulut.js';
 import {
   atlamaGeriAl,
@@ -239,30 +241,30 @@ function altMenu(aktif) {
 }
 
 let verkiSohbeti = [];
-const HITAP_ANAHTAR = 'cuzdan.verkihitap';
 
-function hitapOku() {
+async function verkiDefteri() {
+  const liste = el('div', { sinif: 'kart bosluk' }, el('p', { sinif: 'ipucu' }, 'Yükleniyor…'));
+  goster(
+    ustBolum('Verki’nin defteri', verkiEkrani),
+    el('p', { sinif: 'ipucu' }, 'Verki’ye söylediğin kalıcı şeyleri buraya not alır. Sadece sen görürsün. Silmek istediğini sil ya da sohbette “bunu unut” de.'),
+    liste,
+  );
+  const ciz = (notlar) => liste.replaceChildren(...(notlar.length
+    ? notlar.map((n) => el('div', { sinif: 'kalem' }, el('div', { sinif: 'kalem-metin' }, el('p', {}, n.metin)), el('button', { type: 'button', sinif: 'ikincil', onclick: async () => {
+        try {
+          await verkiDefteriSil(n.id);
+          ciz(notlar.filter((x) => x.id !== n.id));
+        } catch (hata) {
+          uyari = hata.message;
+        }
+      } }, 'Sil')))
+    : [el('p', { sinif: 'ipucu' }, 'Defter boş. Verki’ye “Bana Hocam de” gibi bir şey söyleyince burada görünür.')]));
   try {
-    return localStorage.getItem(HITAP_ANAHTAR) ?? '';
-  } catch {
-    return '';
+    ciz(await verkiDefteriOku());
+  } catch (hata) {
+    liste.replaceChildren(el('p', { sinif: 'ipucu' }, hata.message));
   }
 }
-
-function hitapYaz(ad) {
-  try {
-    if (ad) localStorage.setItem(HITAP_ANAHTAR, ad);
-    else localStorage.removeItem(HITAP_ANAHTAR);
-  } catch {
-    // Saklanamazsa Verki bu oturumda hitabı unutur, sohbet yine çalışır.
-  }
-}
-
-// Kullanıcının yazdığı hitap kısa ve düz kalır; isim gibi kısa bir söz olmalı.
-function hitapTemizle(metin) {
-  return metin.replace(/[^\p{L}\p{N} ]/gu, '').trim().slice(0, 20);
-}
-
 function verkiEkrani() {
   const bugun = bugunTR();
   const liste = el('div', { sinif: 'verki-sohbet', 'aria-live': 'polite' });
@@ -306,37 +308,6 @@ function verkiEkrani() {
     return { metin: cevap.ozet, satirlar: cevap.satirlar };
   };
 
-  const hitapSec = (metin) => {
-    const ad = hitapTemizle(metin);
-    if (!ad) {
-      verkiDedi({ metin: 'Bunu hitap olarak anlayamadım. Sana "Hocam" ya da adın gibi kısa bir şekilde söyle.' });
-      return;
-    }
-    hitapYaz(ad);
-    verkiDedi({ metin: `Memnun oldum ${ad}! Ödemelerini, serbest paranı, harcamalarını sorabilirsin. Yaz ya da mikrofona dokunup söyle.` });
-  };
-
-  // Yapay zekâ bir harcama anlarsa uygulama kaydı kendisi yazar; yanlışsa Geri al ile silinir.
-  const harcamaYaz = (islem) => {
-    const kurus = Math.round(Number(islem.tutar) * 100);
-    if (!Number.isFinite(kurus) || kurus <= 0 || kurus > 100000000) return null;
-    const donem = donemBul(veri.ayar, bugun);
-    if (!veri.donemler[donem.baslangic]) return null;
-    const tarih = /^\d{4}-\d{2}-\d{2}$/.test(islem.tarih) && islem.tarih >= donem.baslangic && islem.tarih <= bugun ? islem.tarih : bugun;
-    const kategori = kategoriler(veri).find((k) => k.toLocaleLowerCase('tr') === String(islem.kategori).toLocaleLowerCase('tr'));
-    const yeni = harcamaEkle(veri, donem.baslangic, { kurus, kategori, not: islem.not || undefined, tarih });
-    const sira = yeni.donemler[donem.baslangic].hareketler.length - 1;
-    kaydetVeUyar(yeni);
-    tamamlandi();
-    return {
-      satirlar: [{ ad: kategori ?? 'Diğer', tutar: paraYaz(kurus), alt: `${tarihYaz(tarih)} · Kalan para: ${paraYaz(kalanPara(veri.donemler[donem.baslangic]))}` }],
-      geriAl: () => {
-        const h = veri.donemler[donem.baslangic]?.hareketler?.[sira];
-        if (h?.tur === 'harcama' && h.kurus === kurus) kaydetVeUyar(hareketSil(veri, donem.baslangic, sira));
-      },
-    };
-  };
-
   // Hazır sorular ve internetsiz durum uygulamanın kendi hesabıyla, serbest sohbet yapay zekâyla cevaplanır.
   const sor = async (metin, hazirKod = null) => {
     const temiz = metin.trim();
@@ -346,10 +317,6 @@ function verkiEkrani() {
     durum.textContent = '';
     verkiSohbeti.push({ rol: 'kullanici', metin: temiz });
     ekle({ rol: 'kullanici', metin: temiz });
-    if (!hitapOku() && !hazirKod) {
-      hitapSec(temiz);
-      return;
-    }
     const kod = hazirKod ?? (oturum() ? null : soruAnla(temiz));
     if (kod) {
       verkiDedi(yerelCevap(kod));
@@ -363,10 +330,12 @@ function verkiEkrani() {
     const bekleme = ekle({ rol: 'verki', yaziyor: true });
     try {
       const gecmis = verkiSohbeti.slice(-9).map((m) => ({ rol: m.rol, metin: m.metin }));
-      const { cevap, islem } = await verkiSor(gecmis, verkiOzeti(veri, bugun), hitapOku());
+      const { cevap, islem, defter } = await verkiSor(gecmis, verkiOzeti(veri, bugun));
       bekleme.remove();
       const kayit = islem ? harcamaYaz(islem) : null;
       verkiDedi(kayit ? { metin: cevap, ...kayit } : { metin: cevap });
+      if (defter?.eklendi) durum.textContent = 'Defterime not aldım.';
+      else if (defter?.silindi) durum.textContent = 'Defterimden sildim.';
     } catch (hata) {
       bekleme.remove();
       const yedek = soruAnla(temiz);
@@ -442,15 +411,10 @@ function verkiEkrani() {
 
   for (const m of verkiSohbeti) liste.append(balon(m));
   if (!verkiSohbeti.length) {
-    const hitap = hitapOku();
-    if (!hitap) {
-      liste.append(balon({ rol: 'verki', metin: 'Merhaba, ben Verki, cüzdanının baykuşu. Sana nasıl hitap etmemi istersin? Aşağıya yaz, mesela adını ya da “Hocam” gibi.' }));
-    } else {
-      liste.append(balon({
-        rol: 'verki',
-        metin: oturum() ? `Merhaba ${hitap}! Ödemelerini, serbest paranı, harcamalarını sorabilirsin. Yaz ya da mikrofona dokunup söyle, anlarım.` : `Merhaba ${hitap}! Aşağıdaki hazır sorulara cevap verebilirim. Serbest sohbet için hesapla giriş yapman lazım (Ayarlar).`,
-      }));
-    }
+    liste.append(balon({
+      rol: 'verki',
+      metin: oturum() ? 'Merhaba, ben Verki, cüzdanının baykuşu. Ödemelerini, serbest paranı, harcamalarını sorabilirsin; harcamanı söylersen kaydederim. Bana söylediğin kalıcı şeyleri defterime not alırım.' : 'Merhaba, ben Verki. Aşağıdaki hazır sorulara cevap verebilirim. Serbest sohbet ve defter için hesapla giriş yapman lazım (Ayarlar).',
+    }));
   }
 
   goster(
@@ -464,7 +428,7 @@ function verkiEkrani() {
     el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', { type: 'button', sinif: 'verki-soru', onclick: () => sor(soru, kod) }, soru))),
     liste,
     durum,
-    hitapOku() ? el('button', { type: 'button', sinif: 'metin-dugme verki-not', onclick: () => { hitapYaz(''); verkiSohbeti = []; verkiEkrani(); } }, `Hitap: ${hitapOku()} · değiştir`) : null,
+    oturum() ? el('button', { type: 'button', sinif: 'metin-dugme verki-not', onclick: verkiDefteri }, 'Verki’nin defteri') : null,
     oturum() ? el('p', { sinif: 'ipucu orta verki-not' }, 'Yazdığın soru ve bu dönemin özeti (ödemeler, harcama toplamları) cevap için Google Gemini’ye gider. İsim ve e-postan gitmez. Günde 30 soru sınırı var.') : null,
     el('form', { sinif: 'verki-yaz', onsubmit: (olay) => { olay.preventDefault(); sor(kutu.value); } }, kutu, mikrofon, gonderDugme),
   );
