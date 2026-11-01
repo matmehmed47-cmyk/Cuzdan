@@ -433,6 +433,7 @@ test('ortak ev: buradan yazılır, ana paradan düşer, geri alınır, Geçmiş\
   const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
   const kayit = () => JSON.parse(window.localStorage.getItem('cuzdan.v1'));
 
+  dugme('Harcamalar').click();
   dugme('Ortak ev').click();
   assert.match(metin(window), /Henüz ortak harcama yok/);
   assert.doesNotMatch(metin(window), /null|undefined/);

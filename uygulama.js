@@ -783,7 +783,6 @@ function anaEkran() {
           { sinif: 'hizli' },
           [
             ['Gelirler', 'gelir', () => gelirlerEkrani()],
-            ['Ortak ev', 'ortak', () => ortakEkrani()],
             ['Alacak-verecek', 'defter', defterEkrani],
             ['Masraf planı', 'plan', planlarEkrani],
             ['Hesap makinesi', 'hesap', hesapEkrani],
@@ -1719,6 +1718,7 @@ function harcamalarEkrani(tarih = null) {
         tarih ? null : el('div', { sinif: 'ikili' },
           el('button', { type: 'button', onclick: () => harcamaFormu(donem, null, yenile) }, '+ Harcama'),
           el('button', { type: 'button', sinif: 'ikincil', onclick: hedefEkrani }, veri.hedef ? 'Hedefi değiştir' : 'Aylık hedef koy')),
+        tarih ? null : el('button', { type: 'button', sinif: 'ikincil bosluk', onclick: () => ortakEkrani() }, 'Ortak ev'),
         toplamlar.length
           ? el(
               'section',
@@ -1852,7 +1852,7 @@ function ortakEkrani(tarih = null) {
   const alinanlar = geriAlinanlar(kayit);
   const ozet = ortakOzet(kayit, veri.ortakKisi);
   goster(
-    ustBolum('Ortak ev', tarih ? gecmisEkrani : anaEkran),
+    ustBolum('Ortak ev', tarih ? gecmisEkrani : harcamalarEkrani),
     bilgiSatiri(),
     el(
       'section',
