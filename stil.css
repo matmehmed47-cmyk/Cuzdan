@@ -1954,20 +1954,45 @@ button.cevirici-yon {
   display: none;
 }
 
-.verki-yaz {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 14px 0 0;
+main.verki-sayfa {
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
 }
 
-.verki-yaz input {
+.verki-yaz {
+  position: fixed;
+  right: 0;
+  bottom: var(--klavye, 0px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--cizgi);
+  background: color-mix(in srgb, var(--yuzey) 94%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.verki-yaz textarea {
   flex: 1;
   min-width: 0;
+  min-height: 44px;
+  max-height: 120px;
   margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--cizgi);
+  border-radius: 13px;
+  background: var(--yuzey-2);
+  color: var(--yazi);
+  font: inherit;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.35;
 }
 
 .verki-yaz button {
+  flex: none;
   width: auto;
   margin: 0;
 }

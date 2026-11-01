@@ -201,7 +201,7 @@ function goster(...dugumler) {
   canliEkran = null;
   aktifGeri = sonrakiGeri;
   sonrakiGeri = null;
-  kok.classList.remove('genis');
+  kok.classList.remove('genis', 'verki-sayfa');
   kok.replaceChildren(...dugumler.flat(Infinity).filter(Boolean));
   window.scrollTo?.(0, 0);
 }
@@ -244,10 +244,27 @@ function verkiEkrani(secili = null, duyulan = '') {
     const temiz = metin.trim();
     if (temiz) verkiEkrani(soruAnla(temiz), temiz);
   };
-  const kutu = el('input', { id: 'verki-soru', name: 'verki-soru', type: 'text', autocomplete: 'off', enterKeyHint: 'send', placeholder: 'Verki’ye yaz…', value: duyulan });
+  const kutu = el('textarea', { id: 'verki-soru', name: 'verki-soru', rows: 1, autocomplete: 'off', enterKeyHint: 'send', placeholder: 'Verki’ye yaz…' });
+  kutu.value = duyulan;
+  // Yazı satır sonunda aşağı kayar; kutu 5 satıra kadar büyür, sonra içinde kaydırılır.
+  const boyutla = () => {
+    kutu.style.height = 'auto';
+    kutu.style.height = `${Math.min(kutu.scrollHeight, 120)}px`;
+  };
+  kutu.addEventListener('input', boyutla);
   kutu.addEventListener('keydown', (olay) => {
-    if (olay.key === 'Enter') sor(kutu.value);
+    if (olay.key === 'Enter' && !olay.shiftKey) {
+      olay.preventDefault();
+      sor(kutu.value);
+    }
   });
+  // Klavye açılınca yazma çubuğu klavyenin üstünde kalsın.
+  const gorunum = window.visualViewport;
+  const klavyeyeUy = () => {
+    if (gorunum) kok.style.setProperty('--klavye', `${Math.max(0, window.innerHeight - gorunum.height - gorunum.offsetTop)}px`);
+  };
+  gorunum?.addEventListener('resize', klavyeyeUy);
+  gorunum?.addEventListener('scroll', klavyeyeUy);
   const Tanima = sesDestegi();
   const sesDurumu = el('p', { sinif: 'ipucu', role: 'status' });
   const mikrofon = Tanima
@@ -277,14 +294,6 @@ function verkiEkrani(secili = null, duyulan = '') {
       el('span', { sinif: 'verki-simge', 'aria-hidden': 'true' }, ikon('verki')),
       el('div', {}, el('h2', {}, 'Merhaba, ben Verki'), el('p', { sinif: 'ipucu' }, 'Paranla ilgili sorularını cevaplarım. Sayıları senin kayıtlarından hesaplarım.')),
     ),
-    el(
-      'form',
-      { sinif: 'verki-yaz', onsubmit: (olay) => { olay.preventDefault(); sor(kutu.value); } },
-      kutu,
-      mikrofon,
-      el('button', { type: 'submit', sinif: 'verki-gonder' }, 'Sor'),
-    ),
-    sesDurumu,
     el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', {
       type: 'button',
       sinif: kod === secili ? 'verki-soru secili' : 'verki-soru',
@@ -298,8 +307,18 @@ function verkiEkrani(secili = null, duyulan = '') {
           el('p', { sinif: 'verki-cevap' }, cevap.ozet),
           cevap.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null)),
         )
-      : el('p', { sinif: 'ipucu orta bosluk' }, anlamadi ? `“${duyulan}” sorusunu tam anlayamadım. Aşağıdaki sorulardan birine dokun ya da “bugün”, “bu hafta”, “serbest param” gibi yaz.` : 'Yaz, söyle ya da bir soruya dokun.'),
+      : el('p', { sinif: 'ipucu orta bosluk' }, anlamadi ? `“${duyulan}” sorusunu tam anlayamadım. Yukarıdaki sorulardan birine dokun ya da “bugün”, “bu hafta”, “serbest param” gibi yaz.` : 'Yaz, söyle ya da bir soruya dokun.'),
+    sesDurumu,
+    el(
+      'form',
+      { sinif: 'verki-yaz', onsubmit: (olay) => { olay.preventDefault(); sor(kutu.value); } },
+      kutu,
+      mikrofon,
+      el('button', { type: 'submit', sinif: 'verki-gonder' }, 'Sor'),
+    ),
   );
+  kok.classList.add('verki-sayfa');
+  klavyeyeUy();
 }
 
 function kaydetVeUyar(yeni) {
