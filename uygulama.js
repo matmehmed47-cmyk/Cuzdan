@@ -151,6 +151,7 @@ const IKONLAR = {
   kalem: '<path d="M4 20l1-4.500L16.5 4l3.5 3.500L8.5 19z"/>',
   yenile: '<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4.500h-4.5"/>',
   dolar: '<circle cx="12" cy="12" r="8.5"/><path d="M15 9c-.5-1.2-1.7-1.8-3-1.8-1.7 0-3 .9-3 2.3 0 3.2 6 1.7 6 4.9 0 1.4-1.3 2.3-3 2.3-1.3 0-2.5-.6-3-1.8"/><path d="M12 5.500v13"/>',
+  gonder: '<path d="M12 19V5"/><path d="M5 12l7-7 7 7"/>',
   mikrofon: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/>',
   defter: '<path d="M6 3.500h11a2 2 0 0 1 2 2v15H7.500A2.5 2.5 0 0 1 5 18V4.500a1 1 0 0 1 1-1z"/><path d="M5 18a2.5 2.5 0 0 1 2.5-2.500H19"/><path d="M9.5 8h5"/>',
   plan: '<rect x="4" y="5" width="16" height="15.5" rx="2.5"/><path d="M4 10h16"/><path d="M8.5 3v4M15.5 3v4"/><path d="m9 15 2 2 4-4"/>',
@@ -270,18 +271,41 @@ function verkiEkrani(secili = null, duyulan = '') {
   const mikrofon = Tanima
     ? el('button', {
         type: 'button',
-        sinif: 'simge verki-mikrofon',
+        sinif: 'verki-mikrofon',
         'aria-label': 'Sesle sor',
-        onclick: () => {
+        onclick: (olay) => {
+          const dugme = olay.currentTarget;
+          if (dugme.classList.contains('dinliyor')) {
+            dugme.tanima?.stop();
+            return;
+          }
           const tanima = new Tanima();
+          dugme.tanima = tanima;
           tanima.lang = 'tr-TR';
           tanima.interimResults = false;
           tanima.maxAlternatives = 1;
-          tanima.onresult = (olay) => sor(olay.results[0][0].transcript);
+          tanima.onresult = (olay) => {
+            dugme.classList.remove('dinliyor');
+            sor(olay.results[0][0].transcript);
+          };
+          const bitir = () => {
+            dugme.classList.remove('dinliyor');
+            kutu.placeholder = 'Verki’ye yaz…';
+          };
           tanima.onerror = () => {
+            bitir();
             sesDurumu.textContent = 'Ses alınamadı. Mikrofon iznini kontrol et ya da yaz.';
           };
-          sesDurumu.textContent = 'Dinliyorum…';
+          tanima.onend = () => {
+            if (dugme.classList.contains('dinliyor')) {
+              bitir();
+              sesDurumu.textContent = 'Bir şey duymadım. Tekrar dene.';
+            }
+          };
+          dugme.classList.add('dinliyor');
+          kutu.placeholder = 'Dinliyorum, konuş…';
+          sesDurumu.textContent = '';
+          titret(10);
           tanima.start();
         },
       }, ikon('mikrofon'))
@@ -294,12 +318,7 @@ function verkiEkrani(secili = null, duyulan = '') {
       el('span', { sinif: 'verki-simge', 'aria-hidden': 'true' }, ikon('verki')),
       el('div', {}, el('h2', {}, 'Merhaba, ben Verki'), el('p', { sinif: 'ipucu' }, 'Paranla ilgili sorularını cevaplarım. Sayıları senin kayıtlarından hesaplarım.')),
     ),
-    el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', {
-      type: 'button',
-      sinif: kod === secili ? 'verki-soru secili' : 'verki-soru',
-      'aria-pressed': String(kod === secili),
-      onclick: () => verkiEkrani(kod),
-    }, soru))),
+    sesDurumu,
     cevap
       ? el(
           'section',
@@ -307,14 +326,19 @@ function verkiEkrani(secili = null, duyulan = '') {
           el('p', { sinif: 'verki-cevap' }, cevap.ozet),
           cevap.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null)),
         )
-      : el('p', { sinif: 'ipucu orta bosluk' }, anlamadi ? `“${duyulan}” sorusunu tam anlayamadım. Yukarıdaki sorulardan birine dokun ya da “bugün”, “bu hafta”, “serbest param” gibi yaz.` : 'Yaz, söyle ya da bir soruya dokun.'),
-    sesDurumu,
+      : el('p', { sinif: 'ipucu orta bosluk' }, anlamadi ? `“${duyulan}” sorusunu tam anlayamadım. Aşağıdaki sorulardan birine dokun ya da “bugün”, “bu hafta”, “serbest param” gibi yaz.` : 'Yaz, söyle ya da bir soruya dokun.'),
+    el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', {
+      type: 'button',
+      sinif: kod === secili ? 'verki-soru secili' : 'verki-soru',
+      'aria-pressed': String(kod === secili),
+      onclick: () => verkiEkrani(kod),
+    }, soru))),
     el(
       'form',
       { sinif: 'verki-yaz', onsubmit: (olay) => { olay.preventDefault(); sor(kutu.value); } },
       kutu,
       mikrofon,
-      el('button', { type: 'submit', sinif: 'verki-gonder' }, 'Sor'),
+      el('button', { type: 'submit', sinif: 'verki-gonder', 'aria-label': 'Gönder' }, ikon('gonder')),
     ),
   );
   kok.classList.add('verki-sayfa');
