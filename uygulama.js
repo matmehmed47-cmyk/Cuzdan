@@ -308,6 +308,27 @@ function verkiEkrani() {
     return { metin: cevap.ozet, satirlar: cevap.satirlar };
   };
 
+  // Yapay zekâ bir harcama anlarsa uygulama kaydı kendisi yazar; yanlışsa Geri al ile silinir.
+  const harcamaYaz = (islem) => {
+    const kurus = Math.round(Number(islem.tutar) * 100);
+    if (!Number.isFinite(kurus) || kurus <= 0 || kurus > 100000000) return null;
+    const donem = donemBul(veri.ayar, bugun);
+    if (!veri.donemler[donem.baslangic]) return null;
+    const tarih = /^\d{4}-\d{2}-\d{2}$/.test(islem.tarih) && islem.tarih >= donem.baslangic && islem.tarih <= bugun ? islem.tarih : bugun;
+    const kategori = kategoriler(veri).find((k) => k.toLocaleLowerCase('tr') === String(islem.kategori).toLocaleLowerCase('tr'));
+    const yeni = harcamaEkle(veri, donem.baslangic, { kurus, kategori, not: islem.not || undefined, tarih });
+    const sira = yeni.donemler[donem.baslangic].hareketler.length - 1;
+    kaydetVeUyar(yeni);
+    tamamlandi();
+    return {
+      satirlar: [{ ad: kategori ?? 'Diğer', tutar: paraYaz(kurus), alt: `${tarihYaz(tarih)} · Kalan para: ${paraYaz(kalanPara(veri.donemler[donem.baslangic]))}` }],
+      geriAl: () => {
+        const h = veri.donemler[donem.baslangic]?.hareketler?.[sira];
+        if (h?.tur === 'harcama' && h.kurus === kurus) kaydetVeUyar(hareketSil(veri, donem.baslangic, sira));
+      },
+    };
+  };
+
   // Hazır sorular ve internetsiz durum uygulamanın kendi hesabıyla, serbest sohbet yapay zekâyla cevaplanır.
   const sor = async (metin, hazirKod = null) => {
     const temiz = metin.trim();

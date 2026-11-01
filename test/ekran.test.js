@@ -1382,3 +1382,35 @@ test('yükleme düğmesi: olay gelince çıkar, basınca yükleme penceresi aç�
   window.dispatchEvent(new window.Event('appinstalled'));
   assert.equal(dugme.hidden, true);
 });
+
+test('verki: yapay zekâ harcama anlayınca uygulama kaydı yazar, Geri al siler', async () => {
+  const bugun = bugunTR();
+  const donem = donemBul(ilkAyar(15), bugun);
+  const baslangic = JSON.stringify({ surum: 1, ad: 'Ev', ayar: ilkAyar(15), donemler: { [donem.baslangic]: { para: 100000, hareketler: [] } } });
+  const window = await uygulamaAc(baslangic, (w) => {
+    w.localStorage.setItem('cuzdan.oturum', JSON.stringify({ erisim: 'a', yenileme: 'b', bitis: Date.now() + 3600000, id: 'u1', eposta: 'a@b.com' }));
+    w.fetch = async (adres) => ({
+      ok: true,
+      status: 200,
+      text: async () => '[]',
+      json: async () => (String(adres).includes('/functions/v1/verki')
+        ? { cevap: 'Kaydettim: Market 50,00 TL.', islem: { tutar: 50, kategori: 'Market', tarih: bugun, not: '' }, defter: null }
+        : []),
+    });
+  });
+  const { document } = window;
+  const dugme = (m) => [...document.querySelectorAll('button')].find((d) => d.textContent === m);
+  document.querySelector('.verki-dugme').click();
+  const kutu = document.getElementById('verki-soru');
+  kutu.value = '50 TL market harcaması yaptım';
+  gonder(window, document.querySelector('.verki-yaz'));
+  await new Promise((r) => setTimeout(r, 50));
+
+  const kayit = JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[donem.baslangic].hareketler;
+  assert.equal(kayit.length, 1);
+  assert.equal(kayit[0].kurus, 5000);
+  assert.equal(kayit[0].kategori, 'Market');
+  assert.match(metin(window), /Kaydettim: Market 50,00 TL/);
+  dugme('Geri al').click();
+  assert.equal(JSON.parse(window.localStorage.getItem('cuzdan.v1')).donemler[donem.baslangic].hareketler.length, 0);
+});
