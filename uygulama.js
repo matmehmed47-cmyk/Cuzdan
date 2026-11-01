@@ -411,10 +411,18 @@ function verkiEkrani() {
 
   for (const m of verkiSohbeti) liste.append(balon(m));
   if (!verkiSohbeti.length) {
-    liste.append(balon({
+    const acilis = balon({
       rol: 'verki',
       metin: oturum() ? 'Merhaba, ben Verki, cüzdanının baykuşu. Ödemelerini, serbest paranı, harcamalarını sorabilirsin; harcamanı söylersen kaydederim. Bana söylediğin kalıcı şeyleri defterime not alırım.' : 'Merhaba, ben Verki. Aşağıdaki hazır sorulara cevap verebilirim. Serbest sohbet ve defter için hesapla giriş yapman lazım (Ayarlar).',
-    }));
+    });
+    liste.append(acilis);
+    // Defterde hitap notu yoksa ilk işim tanışmak: kullanıcıdan adını ya da nasıl seslenmemi istediğini yazmasını isterim.
+    if (oturum()) {
+      verkiDefteriOku().then((notlar) => {
+        const tanisik = notlar.some((n) => /hitap|seslen|çağır|ismi|adı/i.test(n.metin));
+        if (!tanisik && !verkiSohbeti.length) acilis.querySelector('p').textContent = 'Merhaba, ben Verki, cüzdanının baykuşu. Önce tanışalım: bana bir isim ver. Sana nasıl hitap etmemi istersin? Adını ya da “Hocam” gibi bir şey yaz.';
+      }).catch(() => {});
+    }
   }
 
   goster(
