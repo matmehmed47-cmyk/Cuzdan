@@ -3,7 +3,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const GUNLUK_SINIR = 30;
 // İlki yoğunsa ya da kalkarsa yedeğe geçilir.
-const MODELLER = ['gemini-3.5-flash', 'gemini-3.8-flash'];
+const MODELLER = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+const BEKLEME_MS = 8000;
 const EN_COK_MESAJ = 10;
 const MESAJ_UZUNLUGU = 600;
 const OZET_UZUNLUGU = 14000;
@@ -20,6 +21,7 @@ const SISTEM = `Sen Verki'sin: Cüzdan adlı kişisel para uygulamasının bayku
 Kurallar:
 - Sayıları, tarihleri ve ödemeleri YALNIZ aşağıdaki OZET verisinden al. Kendin hesap yapma, tahmin etme, uydurma. OZET'te olmayan bir şeyi sorarlarsa "Bunu kayıtlarımda göremiyorum" de.
 - Serbest para, günlük harcama gibi hazır hesapları OZET'ten aynen kullan. Tutarlar TL'dir ve OZET'te zaten yazıya çevrilmiş halde de verilmiştir.
+- Tutarları ve sayıları rakamla yaz (9.335,00 TL gibi), yazıyla yazma.
 - Cevabı en fazla 5-6 kısa cümle yaz. Düz yazı kullan: başlık, kalın yazı, yıldız ya da tablo kullanma. Liste gerekirse her satıra "- " koy.
 - Para tavsiyesinde aşırı iddialı olma; yargılama, suçlama. Yatırım ya da kredi tavsiyesi verme.
 - Kullanıcı bir harcama ya da ödeme kaydetmek isterse, kaydı sen yapamazsın; "Bunu şimdilik harcama ekranından kendin girebilirsin" de.
@@ -62,17 +64,26 @@ Deno.serve(async (istek) => {
   });
   let cevap!: Response;
   for (const model of MODELLER) {
-    cevap = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'x-goog-api-key': Deno.env.get('GEMINI_ANAHTAR')!, 'content-type': 'application/json' },
-      body: govdeMetni,
-    });
-    if (cevap.ok) break;
+    try {
+      cevap = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'x-goog-api-key': Deno.env.get('GEMINI_ANAHTAR')!, 'content-type': 'application/json' },
+        body: govdeMetni,
+        signal: AbortSignal.timeout(BEKLEME_MS),
+      });
+      if (cevap.ok) break;
+    } catch {
+      cevap = new Response('zaman-asimi', { status: 504 });
+    }
   }
   if (!cevap.ok) return yanit({ hata: 'yapay-zeka', ayrinti: (await cevap.text()).slice(0, 200) }, 502);
   const metin = (await cevap.json())?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('').trim();
   if (!metin) return yanit({ hata: 'bos' }, 502);
 
-  await db.from('verki_kullanim').upsert({ kullanici, gun, sayi: kullanilan + 1 });
+  // Sayaç cevabı geciktirmesin diye arkada yazılır.
+  const sayac = db.from('verki_kullanim').upsert({ kullanici, gun, sayi: kullanilan + 1 }).then(() => {});
+  // deno-lint-ignore no-explicit-any
+  if (typeof (globalThis as any).EdgeRuntime !== 'undefined') (globalThis as any).EdgeRuntime.waitUntil(sayac);
+  else await sayac;
   return yanit({ cevap: metin, kalan: GUNLUK_SINIR - kullanilan - 1 });
 });
