@@ -247,12 +247,17 @@ function verkiEkrani() {
   const kutu = el('textarea', { id: 'verki-soru', name: 'verki-soru', rows: 1, autocomplete: 'off', enterKeyHint: 'send', placeholder: 'Verki’ye yaz…' });
   const gonderDugme = el('button', { type: 'submit', sinif: 'verki-gonder', 'aria-label': 'Gönder' }, ikon('gonder'));
 
-  const balon = (m) => el(
-    'div',
-    { sinif: m.rol === 'verki' ? 'verki-balon verki' : 'verki-balon sen' },
-    el('p', {}, m.metin),
-    (m.satirlar ?? []).length ? el('div', { sinif: 'verki-satirlar' }, m.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null))) : null,
-  );
+  const balon = (m) => {
+    const icerik = el(
+      'div',
+      { sinif: m.rol === 'verki' ? 'verki-balon verki' : 'verki-balon sen' },
+      m.yaziyor ? el('span', { sinif: 'yaziyor', 'aria-label': 'Yazıyor' }, el('i'), el('i'), el('i')) : el('p', {}, m.metin),
+      (m.satirlar ?? []).length ? el('div', { sinif: 'verki-satirlar' }, m.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null))) : null,
+    );
+    return m.rol === 'verki'
+      ? el('div', { sinif: 'verki-satir' }, el('span', { sinif: 'verki-mini', 'aria-hidden': 'true' }, ikon('verki')), icerik)
+      : el('div', { sinif: 'verki-satir sen' }, icerik);
+  };
   const ekle = (m) => {
     const dugum = balon(m);
     liste.append(dugum);
@@ -287,7 +292,7 @@ function verkiEkrani() {
       return;
     }
     gonderDugme.disabled = true;
-    const bekleme = ekle({ rol: 'verki', metin: 'Yazıyor…' });
+    const bekleme = ekle({ rol: 'verki', yaziyor: true });
     try {
       const gecmis = verkiSohbeti.slice(-9).map((m) => ({ rol: m.rol, metin: m.metin }));
       const { cevap } = await verkiSor(gecmis, verkiOzeti(veri, bugun));
@@ -370,12 +375,18 @@ function verkiEkrani() {
   if (!verkiSohbeti.length) {
     liste.append(balon({
       rol: 'verki',
-      metin: oturum() ? 'Merhaba, ben Verki. Paranla ilgili ne istersen sor: ödemelerin, serbest paran, harcamaların… Yaz ya da mikrofona dokunup söyle.' : 'Merhaba, ben Verki. Aşağıdaki hazır sorulara cevap verebilirim. Serbest sohbet için hesapla giriş yapman lazım (Ayarlar).',
+      metin: oturum() ? 'Ödemelerini, serbest paranı, harcamalarını sorabilirsin. Yaz ya da mikrofona dokunup söyle, anlarım.' : 'Aşağıdaki hazır sorulara cevap verebilirim. Serbest sohbet için hesapla giriş yapman lazım (Ayarlar).',
     }));
   }
 
   goster(
     ustBolum('Verki', anaEkran),
+    el(
+      'section',
+      { sinif: 'verki-tanitim' },
+      el('span', { sinif: 'verki-simge', 'aria-hidden': 'true' }, ikon('verki')),
+      el('div', {}, el('h2', {}, 'Merhaba, ben Verki'), el('p', {}, 'Paranı senin için okurum, sorularını cevaplarım.')),
+    ),
     el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', { type: 'button', sinif: 'verki-soru', onclick: () => sor(soru, kod) }, soru))),
     liste,
     durum,
