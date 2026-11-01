@@ -114,7 +114,7 @@ import { sesAyarla, sesCal } from './sesler.js';
 import { imzaSvg } from './imza.js';
 import { BIRIMLER, birimBul, cevir, gerekli } from './cevirici.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
-import { SORULAR, verkiCevabi } from './verki.js';
+import { SORULAR, soruAnla, verkiCevabi } from './verki.js';
 import { konusmaCoz } from './ses.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
 import {
@@ -236,9 +236,39 @@ function altMenu(aktif) {
   );
 }
 
-function verkiEkrani(secili = null) {
+function verkiEkrani(secili = null, duyulan = '') {
   const bugun = bugunTR();
   const cevap = secili ? verkiCevabi(secili, veri, bugun) : null;
+  const anlamadi = duyulan && !secili;
+  const sor = (metin) => {
+    const temiz = metin.trim();
+    if (temiz) verkiEkrani(soruAnla(temiz), temiz);
+  };
+  const kutu = el('input', { id: 'verki-soru', name: 'verki-soru', type: 'text', autocomplete: 'off', enterKeyHint: 'send', placeholder: 'Verki’ye yaz…', value: duyulan });
+  kutu.addEventListener('keydown', (olay) => {
+    if (olay.key === 'Enter') sor(kutu.value);
+  });
+  const Tanima = sesDestegi();
+  const sesDurumu = el('p', { sinif: 'ipucu', role: 'status' });
+  const mikrofon = Tanima
+    ? el('button', {
+        type: 'button',
+        sinif: 'simge verki-mikrofon',
+        'aria-label': 'Sesle sor',
+        onclick: () => {
+          const tanima = new Tanima();
+          tanima.lang = 'tr-TR';
+          tanima.interimResults = false;
+          tanima.maxAlternatives = 1;
+          tanima.onresult = (olay) => sor(olay.results[0][0].transcript);
+          tanima.onerror = () => {
+            sesDurumu.textContent = 'Ses alınamadı. Mikrofon iznini kontrol et ya da yaz.';
+          };
+          sesDurumu.textContent = 'Dinliyorum…';
+          tanima.start();
+        },
+      }, ikon('mikrofon'))
+    : null;
   goster(
     ustBolum('Verki', anaEkran),
     el(
@@ -247,6 +277,14 @@ function verkiEkrani(secili = null) {
       el('span', { sinif: 'verki-simge', 'aria-hidden': 'true' }, ikon('verki')),
       el('div', {}, el('h2', {}, 'Merhaba, ben Verki'), el('p', { sinif: 'ipucu' }, 'Paranla ilgili sorularını cevaplarım. Sayıları senin kayıtlarından hesaplarım.')),
     ),
+    el(
+      'form',
+      { sinif: 'verki-yaz', onsubmit: (olay) => { olay.preventDefault(); sor(kutu.value); } },
+      kutu,
+      mikrofon,
+      el('button', { type: 'submit', sinif: 'verki-gonder' }, 'Sor'),
+    ),
+    sesDurumu,
     el('div', { sinif: 'verki-sorular' }, SORULAR.map(({ kod, soru }) => el('button', {
       type: 'button',
       sinif: kod === secili ? 'verki-soru secili' : 'verki-soru',
@@ -260,8 +298,7 @@ function verkiEkrani(secili = null) {
           el('p', { sinif: 'verki-cevap' }, cevap.ozet),
           cevap.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null)),
         )
-      : el('p', { sinif: 'ipucu orta bosluk' }, 'Bir soruya dokun.'),
-    el('p', { sinif: 'ipucu orta bosluk' }, 'Yazarak ve konuşarak sorma yakında eklenecek.'),
+      : el('p', { sinif: 'ipucu orta bosluk' }, anlamadi ? `“${duyulan}” sorusunu tam anlayamadım. Aşağıdaki sorulardan birine dokun ya da “bugün”, “bu hafta”, “serbest param” gibi yaz.` : 'Yaz, söyle ya da bir soruya dokun.'),
   );
 }
 

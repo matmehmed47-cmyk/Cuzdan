@@ -17,6 +17,26 @@ export const SORULAR = [
   { kod: 'kategori', soru: 'Bu dönem en çok nereye harcadım?' },
 ];
 
+const ANLAMA = [
+  ['geciken', ['gecik', 'kacir', 'unuttum']],
+  ['gunluk', ['gunde', 'gunluk', 'harcayabilir']],
+  ['kategori', ['nereye', 'en cok', 'kategori', 'neye harc']],
+  ['hafta', ['hafta']],
+  ['donem', ['maas', 'donem', 'ay sonu', 'aya kadar']],
+  ['serbest', ['serbest', 'param', 'cebimde', 'elimde', 'kaldi']],
+  ['bugun', ['bugun', 'fatura', 'odeme', 'odemem', 'borc', 'taksit']],
+];
+
+function sadelestir(metin) {
+  return metin.toLocaleLowerCase('tr').replace(/[çğıöşü]/g, (h) => ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' })[h]);
+}
+
+// Yazılan ya da söylenen cümlede hazır sorulardan hangisinin kastedildiğini anahtar kelimeyle bulur.
+export function soruAnla(metin) {
+  const temiz = sadelestir(metin);
+  return ANLAMA.find(([, kelimeler]) => kelimeler.some((k) => temiz.includes(k)))?.[0] ?? null;
+}
+
 function bekleyenler(veri, donem, bitis, bugun) {
   const sinir = { baslangic: donem.baslangic, bitis };
   return [...donemKalemleri(veri, sinir, bugun), ...donemTaksitleri(veri, sinir, bugun)]

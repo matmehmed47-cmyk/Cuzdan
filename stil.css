@@ -1953,3 +1953,26 @@ button.cevirici-yon {
 .kurulum-dugmesi[hidden] {
   display: none;
 }
+
+.verki-yaz {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+}
+
+.verki-yaz input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.verki-yaz button {
+  width: auto;
+  margin: 0;
+}
+
+button.verki-gonder {
+  min-height: 44px;
+  padding: 0 18px;
+}

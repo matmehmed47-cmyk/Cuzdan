@@ -913,3 +913,14 @@ test('güncellik fiyatın değişmesine bakar, saat ilerlese de durgun fiyat gü
   assert.equal(piyasaDurumu({ tarih: '2026-10-30', alindi: 2 * saat, degisti: 1.5 * saat }, 2 * saat + 1000, '2026-10-30'), 'guncel');
   assert.equal(piyasaDurumu({ tarih: '2026-10-30', alindi: 3 * saat, degisti: saat }, 3 * saat + 1000, '2026-10-30'), 'eski');
 });
+
+test('verki: yazılan cümleden hazır soru bulunur', async () => {
+  const { soruAnla } = await import('../verki.js');
+  assert.equal(soruAnla('Bugün ödemem gereken fatura var mı?'), 'bugun');
+  assert.equal(soruAnla('geciken borcum var mı'), 'geciken');
+  assert.equal(soruAnla('Günde ne kadar harcayabilirim'), 'gunluk');
+  assert.equal(soruAnla('SERBEST PARAM KAÇ'), 'serbest');
+  assert.equal(soruAnla('Bu hafta ne var'), 'hafta');
+  assert.equal(soruAnla('en çok nereye harcadım'), 'kategori');
+  assert.equal(soruAnla('merhaba'), null);
+});
