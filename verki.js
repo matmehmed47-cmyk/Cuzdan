@@ -2,7 +2,7 @@
 
 import { donemBul, gunEkle, gunFarki } from './donem.js';
 import { ayrilanTutar, bekliyorMu, donemKalemleri } from './fatura.js';
-import { kategoriToplamlari } from './harcama.js';
+import { kategoriToplamlari, siraliKategoriler } from './harcama.js';
 import { kalanPara, paraYaz } from './para.js';
 import { kenardaPara } from './plan.js';
 import { donemTaksitleri } from './taksit.js';
@@ -140,6 +140,7 @@ export function verkiOzeti(veri, bugun) {
     buDonemHarcamaToplami: paraYaz(harcamalar.reduce((t, h) => t + h.kurus, 0)),
     kategoriToplamlari: toplamlar.slice(0, 10).map((k) => ({ kategori: k.ad, tutar: paraYaz(k.kurus) })),
     sonHarcamalar: harcamalar.slice(0, 15).map((h) => ({ tarih: h.tarih, tutar: paraYaz(h.kurus), kategori: h.kategori ?? 'Diğer' })),
+    kategoriler: siraliKategoriler(veri),
     aylikHedef: veri.hedef ? paraYaz(veri.hedef) : null,
   };
 }

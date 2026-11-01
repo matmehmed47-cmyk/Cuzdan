@@ -1,4 +1,4 @@
-const SURUM = 'cuzdan-46';
+const SURUM = 'cuzdan-47';
 const BILDIRIM = 'cuzdan-bildirim';
 const EN_ESKI = 2 * 24 * 60 * 60 * 1000;
 const DOSYALAR = [

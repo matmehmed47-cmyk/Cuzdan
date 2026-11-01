@@ -270,12 +270,22 @@ function verkiEkrani() {
   const kutu = el('textarea', { id: 'verki-soru', name: 'verki-soru', rows: 1, autocomplete: 'off', enterKeyHint: 'send', placeholder: 'Verki’ye yaz…' });
   const gonderDugme = el('button', { type: 'submit', sinif: 'verki-gonder', 'aria-label': 'Gönder' }, ikon('gonder'));
 
+  const geriAlAlani = (m) => {
+    if (m.bitti) return el('p', { sinif: 'ipucu' }, 'Geri alındı.');
+    const dugme = el('button', { type: 'button', sinif: 'ikincil verki-geri', onclick: () => {
+      m.bitti = true;
+      m.geriAl();
+      dugme.replaceWith(el('p', { sinif: 'ipucu' }, 'Geri alındı.'));
+    } }, 'Geri al');
+    return dugme;
+  };
   const balon = (m) => {
     const icerik = el(
       'div',
       { sinif: m.rol === 'verki' ? 'verki-balon verki' : 'verki-balon sen' },
       m.yaziyor ? el('span', { sinif: 'yaziyor', 'aria-label': 'Yazıyor' }, el('i'), el('i'), el('i')) : el('p', {}, m.metin),
       (m.satirlar ?? []).length ? el('div', { sinif: 'verki-satirlar' }, m.satirlar.map((s) => kalem(s.ad, s.tutar, s.alt ?? null))) : null,
+      m.geriAl ? geriAlAlani(m) : null,
     );
     return m.rol === 'verki'
       ? el('div', { sinif: 'verki-satir' }, el('span', { sinif: 'verki-mini', 'aria-hidden': 'true' }, ikon('verki')), icerik)
@@ -306,6 +316,27 @@ function verkiEkrani() {
     verkiDedi({ metin: `Memnun oldum ${ad}! Ödemelerini, serbest paranı, harcamalarını sorabilirsin. Yaz ya da mikrofona dokunup söyle.` });
   };
 
+  // Yapay zekâ bir harcama anlarsa uygulama kaydı kendisi yazar; yanlışsa Geri al ile silinir.
+  const harcamaYaz = (islem) => {
+    const kurus = Math.round(Number(islem.tutar) * 100);
+    if (!Number.isFinite(kurus) || kurus <= 0 || kurus > 100000000) return null;
+    const donem = donemBul(veri.ayar, bugun);
+    if (!veri.donemler[donem.baslangic]) return null;
+    const tarih = /^\d{4}-\d{2}-\d{2}$/.test(islem.tarih) && islem.tarih >= donem.baslangic && islem.tarih <= bugun ? islem.tarih : bugun;
+    const kategori = kategoriler(veri).find((k) => k.toLocaleLowerCase('tr') === String(islem.kategori).toLocaleLowerCase('tr'));
+    const yeni = harcamaEkle(veri, donem.baslangic, { kurus, kategori, not: islem.not || undefined, tarih });
+    const sira = yeni.donemler[donem.baslangic].hareketler.length - 1;
+    kaydetVeUyar(yeni);
+    tamamlandi();
+    return {
+      satirlar: [{ ad: kategori ?? 'Diğer', tutar: paraYaz(kurus), alt: `${tarihYaz(tarih)} · Kalan para: ${paraYaz(kalanPara(veri.donemler[donem.baslangic]))}` }],
+      geriAl: () => {
+        const h = veri.donemler[donem.baslangic]?.hareketler?.[sira];
+        if (h?.tur === 'harcama' && h.kurus === kurus) kaydetVeUyar(hareketSil(veri, donem.baslangic, sira));
+      },
+    };
+  };
+
   // Hazır sorular ve internetsiz durum uygulamanın kendi hesabıyla, serbest sohbet yapay zekâyla cevaplanır.
   const sor = async (metin, hazirKod = null) => {
     const temiz = metin.trim();
@@ -332,9 +363,10 @@ function verkiEkrani() {
     const bekleme = ekle({ rol: 'verki', yaziyor: true });
     try {
       const gecmis = verkiSohbeti.slice(-9).map((m) => ({ rol: m.rol, metin: m.metin }));
-      const { cevap } = await verkiSor(gecmis, verkiOzeti(veri, bugun), hitapOku());
+      const { cevap, islem } = await verkiSor(gecmis, verkiOzeti(veri, bugun), hitapOku());
       bekleme.remove();
-      verkiDedi({ metin: cevap });
+      const kayit = islem ? harcamaYaz(islem) : null;
+      verkiDedi(kayit ? { metin: cevap, ...kayit } : { metin: cevap });
     } catch (hata) {
       bekleme.remove();
       const yedek = soruAnla(temiz);
