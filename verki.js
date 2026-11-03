@@ -31,6 +31,13 @@ function sadelestir(metin) {
   return metin.toLocaleLowerCase('tr').replace(/[çğıöşü]/g, (h) => ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' })[h]);
 }
 
+// Kısa, rakamsız, tavsiye ya da harcama bildirimi içermeyen sorular yapay zekâya gitmeden uygulamada cevaplanır.
+export function kisaSoruMu(metin) {
+  const temiz = sadelestir(metin);
+  if (/\d/.test(temiz) || temiz.split(/\s+/).length > 6) return false;
+  return !/(yaptim|aldim|verdim|odedim|harcadim|yatti|geldi|alsam|almali|yapayim|tavsiye|neden|nasil|hatirla|unut|hitap|bana)/.test(temiz);
+}
+
 // Yazılan ya da söylenen cümlede hazır sorulardan hangisinin kastedildiğini anahtar kelimeyle bulur.
 export function soruAnla(metin) {
   const temiz = sadelestir(metin);

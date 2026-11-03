@@ -117,7 +117,7 @@ import { sesAyarla, sesCal } from './sesler.js';
 import { imzaSvg } from './imza.js';
 import { BIRIMLER, birimBul, cevir, gerekli } from './cevirici.js';
 import { ilkSutun, takvimAyi } from './takvim.js';
-import { SORULAR, soruAnla, verkiCevabi, verkiOzeti } from './verki.js';
+import { SORULAR, kisaSoruMu, soruAnla, verkiCevabi, verkiOzeti } from './verki.js';
 import { konusmaCoz } from './ses.js';
 import { SIFIRA_BOLME, hesapla, ifadeYaz, kurusaCevir, sayidanParca, sonucYaz, tusla, yeniDurum } from './hesap.js';
 import {
@@ -338,7 +338,7 @@ function verkiEkrani() {
     durum.textContent = '';
     verkiSohbeti.push({ rol: 'kullanici', metin: temiz });
     ekle({ rol: 'kullanici', metin: temiz });
-    const kod = hazirKod ?? (oturum() ? null : soruAnla(temiz));
+    const kod = hazirKod ?? (!oturum() || kisaSoruMu(temiz) ? soruAnla(temiz) : null);
     if (kod) {
       verkiDedi(yerelCevap(kod));
       return;
@@ -461,7 +461,7 @@ function verkiEkrani() {
     liste,
     durum,
     oturum() ? el('button', { type: 'button', sinif: 'metin-dugme verki-not', onclick: verkiDefteri }, 'Verki’nin defteri') : null,
-    oturum() ? el('p', { sinif: 'ipucu orta verki-not' }, 'Yazdığın soru ve bu dönemin özeti (ödemeler, harcama toplamları) cevap için Google Gemini’ye gider. İsim ve e-postan gitmez. Günde 30 soru sınırı var.') : null,
+    oturum() ? el('p', { sinif: 'ipucu orta verki-not' }, 'Yazdığın soru ve bu dönemin özeti (ödemeler, harcama toplamları) cevap için Google Gemini’ye gider. İsim ve e-postan gitmez. Günde 15 soru sınırı var.') : null,
     el('form', { sinif: 'verki-yaz', onsubmit: (olay) => { olay.preventDefault(); sor(kutu.value); } }, kutu, mikrofon, gonderDugme),
   );
   kok.classList.add('verki-sayfa');

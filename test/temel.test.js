@@ -924,3 +924,12 @@ test('verki: yazılan cümleden hazır soru bulunur', async () => {
   assert.equal(soruAnla('en çok nereye harcadım'), 'kategori');
   assert.equal(soruAnla('merhaba'), null);
 });
+
+test('kisaSoruMu: kısa soru yerelde, harcama bildirimi ve tavsiye yapay zekâya', async () => {
+  const { kisaSoruMu } = await import('../verki.js');
+  assert.equal(kisaSoruMu('Serbest param ne kadar?'), true);
+  assert.equal(kisaSoruMu('50 TL market harcaması yaptım'), false);
+  assert.equal(kisaSoruMu('bugün ne yapayım'), false);
+  assert.equal(kisaSoruMu('bana Hocam de, param ne kadar'), false);
+  assert.equal(kisaSoruMu('geçen ay marketten sonra kalan param ile ödemelerimi nasıl dengeleyebilirim'), false);
+});

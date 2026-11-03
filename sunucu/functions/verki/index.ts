@@ -1,9 +1,14 @@
 // Verki'nin serbest sohbeti: giriş yapan kullanıcıdan soru alır, Gemini'ye sorar, günlük sınırı burada tutar.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
-const GUNLUK_SINIR = 30;
+const GUNLUK_SINIR = 15;
 // İlki yoğunsa ya da kalkarsa yedeğe geçilir.
 const MODELLER = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+// Gemini olmazsa sırayla bunlar denenir; anahtarı (Edge secret) olmayan atlanır. Model adları servisin güncel listesine göre ayarlanır.
+const YEDEKLER = [
+  { ad: 'mistral', anahtar: 'MISTRAL_ANAHTAR', adres: 'https://api.mistral.ai/v1/chat/completions', model: 'mistral-small-latest' },
+  { ad: 'groq', anahtar: 'GROQ_ANAHTAR', adres: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile' },
+];
 const BEKLEME_MS = 8000;
 const DEFTER_SINIRI = 50;
 const EN_COK_MESAJ = 10;
@@ -61,8 +66,9 @@ Deno.serve(async (istek) => {
   const kullanilan = satir?.sayi ?? 0;
   if (kullanilan >= GUNLUK_SINIR) return yanit({ hata: 'sinir', kalan: 0 }, 429);
 
+  const sistemMetni = `${SISTEM}\n\nDEFTER:\n${defter}\n\nBugünün tarihi: ${gun}\nOZET:\n${ozet}`;
   const govdeMetni = JSON.stringify({
-    systemInstruction: { parts: [{ text: `${SISTEM}\n\nDEFTER:\n${defter}\n\nBugünün tarihi: ${gun}\nOZET:\n${ozet}` }] },
+    systemInstruction: { parts: [{ text: sistemMetni }] },
     contents: mesajlar,
     generationConfig: {
       temperature: 0.4,
@@ -86,23 +92,52 @@ Deno.serve(async (istek) => {
       },
     },
   });
-  let cevap!: Response;
+  let ham = '';
+  let sonHata = '';
   for (const model of MODELLER) {
     try {
-      cevap = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      const cevap = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'x-goog-api-key': Deno.env.get('GEMINI_ANAHTAR')!, 'content-type': 'application/json' },
         body: govdeMetni,
         signal: AbortSignal.timeout(BEKLEME_MS),
       });
-      if (cevap.ok) break;
+      if (cevap.ok) {
+        ham = ((await cevap.json())?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('') ?? '').trim();
+        if (ham) break;
+      } else {
+        sonHata = (await cevap.text()).slice(0, 200);
+      }
     } catch {
-      cevap = new Response('zaman-asimi', { status: 504 });
+      sonHata = 'zaman-asimi';
     }
   }
-  if (!cevap.ok) return yanit({ hata: 'yapay-zeka', ayrinti: (await cevap.text()).slice(0, 200) }, 502);
-  const ham = (await cevap.json())?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? '').join('').trim();
-  if (!ham) return yanit({ hata: 'bos' }, 502);
+  // Gemini'nin günlük hakkı dolduysa ya da çalışmıyorsa, anahtarı tanımlı yedek servisler sırayla denenir.
+  if (!ham) {
+    const duz = mesajlar.map((m: any) => ({ role: m.role === 'model' ? 'assistant' : 'user', content: m.parts[0].text }));
+    const sistem = `${sistemMetni}\n\nYalnız şu biçimde tek bir JSON nesnesi döndür: {"cevap": metin, "islem": {"tutar": sayı, "kategori": metin, "tarih": "YYYY-AA-GG", "not": metin} ya da null, "defterEkle": metin ya da null, "defterSil": sayı ya da null}`;
+    for (const yedek of YEDEKLER) {
+      const anahtar = Deno.env.get(yedek.anahtar);
+      if (!anahtar) continue;
+      try {
+        const cevap = await fetch(yedek.adres, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${anahtar}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ model: yedek.model, messages: [{ role: 'system', content: sistem }, ...duz], temperature: 0.4, max_tokens: 700, response_format: { type: 'json_object' } }),
+          signal: AbortSignal.timeout(BEKLEME_MS),
+        });
+        if (cevap.ok) {
+          ham = ((await cevap.json())?.choices?.[0]?.message?.content ?? '').trim();
+          if (ham) break;
+        } else {
+          sonHata = `${yedek.ad}: ${(await cevap.text()).slice(0, 150)}`;
+        }
+      } catch {
+        sonHata = `${yedek.ad}: zaman-asimi`;
+      }
+    }
+  }
+  if (!ham) return yanit({ hata: 'yapay-zeka', ayrinti: sonHata }, 502);
   let metin = ham;
   let islem = null;
   let defterDegisti = null;
