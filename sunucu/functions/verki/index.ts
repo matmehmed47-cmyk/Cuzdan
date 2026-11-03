@@ -7,6 +7,7 @@ const MODELLER = ['gemini-3.5-flash', 'gemini-3.1-flash-lite'];
 // Gemini olmazsa sırayla bunlar denenir; anahtarı (Edge secret) olmayan atlanır. Model adları servisin güncel listesine göre ayarlanır.
 const YEDEKLER = [
   { ad: 'mistral', anahtar: 'MISTRAL_ANAHTAR', adres: 'https://api.mistral.ai/v1/chat/completions', model: 'mistral-small-latest' },
+  { ad: 'cloudflare', anahtar: 'CLOUDFLARE_ANAHTAR', adres: `https://api.cloudflare.com/client/v4/accounts/${Deno.env.get('CLOUDFLARE_HESAP') ?? 'yok'}/ai/v1/chat/completions`, model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast' },
   { ad: 'groq', anahtar: 'GROQ_ANAHTAR', adres: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.3-70b-versatile' },
 ];
 const BEKLEME_MS = 8000;
